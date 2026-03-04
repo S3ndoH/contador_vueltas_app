@@ -82,7 +82,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 width: size.width * 0.8,
                 height: size.height * 0.6,
                 decoration: BoxDecoration(
-                  color: AppColors.primary.withOpacity(0.15),
+                  color: AppColors.primary.withValues(alpha: 0.15),
                   shape: BoxShape.circle,
                 ),
               ),
@@ -97,7 +97,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 width: size.width * 0.6,
                 height: size.height * 0.4,
                 decoration: BoxDecoration(
-                  color: AppColors.primary.withOpacity(0.08),
+                  color: AppColors.primary.withValues(alpha: 0.08),
                   shape: BoxShape.circle,
                 ),
               ),
@@ -132,8 +132,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           begin: Alignment.topCenter,
                           end: Alignment.bottomCenter,
                           colors: [
-                            AppColors.backgroundDark.withOpacity(0.3),
-                            AppColors.backgroundDark.withOpacity(0.6),
+                            AppColors.backgroundDark.withValues(alpha: 0.3),
+                            AppColors.backgroundDark.withValues(alpha: 0.6),
                             AppColors.backgroundDark,
                           ],
                         ),
@@ -239,7 +239,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             hintText: 'Juan Perez',
                             suffixIcon: Icon(
                               Icons.person_outline,
-                              color: AppColors.textMuted.withOpacity(0.5),
+                              color: AppColors.textMuted.withValues(alpha: 0.5),
                             ),
                           ),
                         ),
@@ -261,7 +261,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             hintText: 'athlete@lapcounter.com',
                             suffixIcon: Icon(
                               Icons.mail_outline,
-                              color: AppColors.textMuted.withOpacity(0.5),
+                              color: AppColors.textMuted.withValues(alpha: 0.5),
                             ),
                           ),
                         ),
@@ -286,7 +286,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                 _obscurePassword
                                     ? Icons.visibility_off_outlined
                                     : Icons.visibility_outlined,
-                                color: AppColors.textMuted.withOpacity(0.5),
+                                color: AppColors.textMuted.withValues(
+                                  alpha: 0.5,
+                                ),
                                 size: 20,
                               ),
                               onPressed: () {
@@ -446,7 +448,7 @@ class _SocialButton extends StatelessWidget {
     return Container(
       height: 48,
       decoration: BoxDecoration(
-        color: AppColors.surfaceDark.withOpacity(0.5),
+        color: AppColors.surfaceDark.withValues(alpha: 0.5),
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: AppColors.surfaceDark),
       ),
