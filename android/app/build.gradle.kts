@@ -8,6 +8,7 @@ plugins {
 android {
     namespace = "com.example.contador_vueltas_app"
     compileSdk = 36
+    buildToolsVersion = "35.0.0"
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
