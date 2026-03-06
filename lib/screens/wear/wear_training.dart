@@ -37,23 +37,13 @@ class _WearTrainingScreenState extends State<WearTrainingScreen> {
 
     final id = await _databaseService.createTraining(
       trackLengthMeters: 200,
-      description: 'Sesión WearOS',
+      description: 'Sesión Watch',
     );
 
     if (mounted) {
-      if (id != null) {
-        setState(() {
-          _trainingId = id;
-        });
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Modo Local (Sin Login)'),
-            backgroundColor: AppColors.error,
-            duration: Duration(seconds: 2),
-          ),
-        );
-      }
+      setState(() {
+        _trainingId = id; // Could be real or local_ timestamp
+      });
     }
   }
 
@@ -72,22 +62,24 @@ class _WearTrainingScreenState extends State<WearTrainingScreen> {
   double get _currentTime => _stopwatch.elapsedMilliseconds / 1000.0;
 
   void _recordLap() async {
-    if (_trainingId == null) return;
     double lapTime = _currentTime - _lastLapTime;
     int lapNumber = _laps.length + 1;
-    double speed = (200 / lapTime) * 3.6;
+    double speed = (200 / (lapTime > 0 ? lapTime : 1)) * 3.6;
 
     setState(() {
       _laps.add(lapTime);
       _lastLapTime = _currentTime;
     });
 
-    _databaseService.addLap(
-      trainingId: _trainingId!,
-      lapNumber: lapNumber,
-      durationSeconds: lapTime,
-      averageSpeed: speed,
-    );
+    if (_trainingId != null) {
+      _databaseService.addLap(
+        trainingId: _trainingId!,
+        lapNumber: lapNumber,
+        durationSeconds: lapTime,
+        averageSpeed: speed,
+        tempId: _trainingId!, // Fallback for local queue
+      );
+    }
   }
 
   @override
@@ -125,6 +117,23 @@ class _WearTrainingScreenState extends State<WearTrainingScreen> {
                         ),
                       ],
                     ),
+                  ),
+                ),
+              ),
+              // Status Indicator (Top)
+              Positioned(
+                top: shape == WearShape.round ? 12 : 4,
+                left: 0,
+                right: 0,
+                child: Center(
+                  child: Icon(
+                    _trainingId != null
+                        ? LucideIcons.cloud
+                        : LucideIcons.cloudOff,
+                    color: _trainingId != null
+                        ? AppColors.success
+                        : AppColors.error,
+                    size: 14,
                   ),
                 ),
               ),
