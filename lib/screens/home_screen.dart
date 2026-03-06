@@ -424,7 +424,9 @@ class _HomeScreenState extends State<HomeScreen> {
             }),
             const SizedBox(width: 40), // Space for FAB
             _buildNavItem(LucideIcons.trophy, 'Desafíos', false, () {}),
-            _buildNavItem(LucideIcons.user, 'Perfil', false, () {}),
+            _buildNavItem(LucideIcons.user, 'Perfil', false, () {
+              Navigator.pushNamed(context, '/profile');
+            }),
           ],
         ),
       ),
