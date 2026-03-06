@@ -166,35 +166,38 @@ class _WearHomeScreenState extends State<WearHomeScreen> {
               ),
               // Settings/Login Button
               Positioned(
-                top: 10,
-                right: 10,
-                child: IconButton(
-                  icon: Icon(
-                    isSynced ? LucideIcons.userCheck : LucideIcons.userX,
-                    color: isSynced ? AppColors.success : Colors.white54,
-                    size: 16,
+                top: shape == WearShape.round ? 8 : 4,
+                left: 0,
+                right: 0,
+                child: Center(
+                  child: IconButton(
+                    icon: Icon(
+                      isSynced ? LucideIcons.userCheck : LucideIcons.userX,
+                      color: isSynced ? AppColors.success : Colors.white54,
+                      size: 16,
+                    ),
+                    onPressed: () {
+                      if (!isSynced) {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const WearLoginScreen(),
+                          ),
+                        );
+                      } else {
+                        // Show status or logout option
+                        _showStatusDialog();
+                      }
+                    },
                   ),
-                  onPressed: () {
-                    if (!isSynced) {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const WearLoginScreen(),
-                        ),
-                      );
-                    } else {
-                      // Show status or logout option
-                      _showStatusDialog();
-                    }
-                  },
                 ),
               ),
               // Sync Indicator
               if (_isSyncing)
-                const Positioned(
-                  top: 10,
-                  left: 10,
-                  child: SizedBox(
+                Positioned(
+                  top: shape == WearShape.round ? 15 : 10,
+                  left: shape == WearShape.round ? 30 : 10,
+                  child: const SizedBox(
                     width: 12,
                     height: 12,
                     child: CircularProgressIndicator(
@@ -228,7 +231,7 @@ class _WearHomeScreenState extends State<WearHomeScreen> {
           TextButton(
             onPressed: () async {
               await Supabase.instance.client.auth.signOut();
-              if (mounted) {
+              if (context.mounted) {
                 Navigator.pop(context);
                 _updatePendingCount();
                 setState(() {});

@@ -127,10 +127,12 @@ class _WearTrainingScreenState extends State<WearTrainingScreen> {
                 right: 0,
                 child: Center(
                   child: Icon(
-                    _trainingId != null
+                    (_trainingId != null && !_trainingId!.startsWith('local_'))
                         ? LucideIcons.cloud
                         : LucideIcons.cloudOff,
-                    color: _trainingId != null
+                    color:
+                        (_trainingId != null &&
+                            !_trainingId!.startsWith('local_'))
                         ? AppColors.success
                         : AppColors.error,
                     size: 14,
