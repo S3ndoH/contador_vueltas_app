@@ -13,25 +13,40 @@ class EditProfileScreen extends StatefulWidget {
 class _EditProfileScreenState extends State<EditProfileScreen> {
   final _supabase = Supabase.instance.client;
   final _nameController = TextEditingController();
+  final _emailController = TextEditingController();
   bool _isSaving = false;
+  String _initialEmail = '';
 
   @override
   void initState() {
     super.initState();
     final user = _supabase.auth.currentUser;
     _nameController.text = user?.userMetadata?['full_name'] ?? '';
+    _emailController.text = user?.email ?? '';
+    _initialEmail = user?.email ?? '';
   }
 
   @override
   void dispose() {
     _nameController.dispose();
+    _emailController.dispose();
     super.dispose();
   }
 
   Future<void> _saveChanges() async {
-    if (_nameController.text.trim().isEmpty) {
+    final newName = _nameController.text.trim();
+    final newEmail = _emailController.text.trim();
+
+    if (newName.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('El nombre no puede estar vacío')),
+      );
+      return;
+    }
+
+    if (newEmail.isEmpty || !newEmail.contains('@')) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Por favor, ingresa un correo válido')),
       );
       return;
     }
@@ -39,18 +54,30 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     setState(() => _isSaving = true);
 
     try {
+      final emailChanged = newEmail != _initialEmail;
+
       await _supabase.auth.updateUser(
-        UserAttributes(data: {'full_name': _nameController.text.trim()}),
+        UserAttributes(
+          email: emailChanged ? newEmail : null,
+          data: {'full_name': newName},
+        ),
       );
 
       if (mounted) {
+        String message = 'Perfil actualizado correctamente';
+        if (emailChanged) {
+          message +=
+              '. Se ha enviado un enlace de confirmación a tu nuevo correo.';
+        }
+
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Perfil actualizado correctamente'),
+          SnackBar(
+            content: Text(message),
             backgroundColor: AppColors.success,
+            duration: const Duration(seconds: 5),
           ),
         );
-        Navigator.pop(context, true); // Return true to indicate refresh needed
+        Navigator.pop(context, true);
       }
     } catch (e) {
       if (mounted) {
@@ -96,7 +123,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             ),
             const SizedBox(height: 8),
             const Text(
-              'Actualiza tu nombre para que otros patinadores puedan reconocerte.',
+              'Actualiza tu nombre y correo para mantener tu perfil al día.',
               style: TextStyle(color: AppColors.textMuted),
             ),
             const SizedBox(height: 32),
@@ -105,6 +132,14 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               controller: _nameController,
               icon: LucideIcons.user,
               hint: 'Ej: Juan Pérez',
+            ),
+            const SizedBox(height: 24),
+            _buildTextField(
+              label: 'Correo Electrónico',
+              controller: _emailController,
+              icon: LucideIcons.mail,
+              hint: 'correo@ejemplo.com',
+              keyboardType: TextInputType.emailAddress,
             ),
             const SizedBox(height: 48),
             SizedBox(
@@ -142,6 +177,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     required TextEditingController controller,
     required IconData icon,
     required String hint,
+    TextInputType? keyboardType,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -157,6 +193,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         const SizedBox(height: 10),
         TextField(
           controller: controller,
+          keyboardType: keyboardType,
           style: const TextStyle(color: Colors.white),
           decoration: InputDecoration(
             hintText: hint,
