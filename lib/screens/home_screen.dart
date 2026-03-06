@@ -28,7 +28,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
-    final trainings = await _databaseService.getRecentTrainings();
+    final trainings = await _databaseService.getRecentTrainings(limit: 5);
     if (mounted) {
       setState(() {
         _recentTrainings = trainings;
@@ -410,6 +410,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildBottomNav() {
     return BottomAppBar(
       color: AppColors.surfaceDark,
+      padding: EdgeInsets.zero,
       notchMargin: 8,
       shape: const CircularNotchedRectangle(),
       child: SizedBox(
@@ -417,36 +418,50 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
-            _buildNavItem(LucideIcons.home, 'Inicio', true),
-            _buildNavItem(LucideIcons.barChart2, 'Marcas', false),
+            _buildNavItem(LucideIcons.home, 'Inicio', true, () {}),
+            _buildNavItem(LucideIcons.calendar, 'Calendario', false, () {
+              Navigator.pushNamed(context, '/calendar');
+            }),
             const SizedBox(width: 40), // Space for FAB
-            _buildNavItem(LucideIcons.trophy, 'Desafíos', false),
-            _buildNavItem(LucideIcons.user, 'Perfil', false),
+            _buildNavItem(LucideIcons.trophy, 'Desafíos', false, () {}),
+            _buildNavItem(LucideIcons.user, 'Perfil', false, () {}),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildNavItem(IconData icon, String label, bool isActive) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(
-          icon,
-          color: isActive ? AppColors.primary : AppColors.textMuted,
-          size: 20,
+  Widget _buildNavItem(
+    IconData icon,
+    String label,
+    bool isActive,
+    VoidCallback onTap,
+  ) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              color: isActive ? AppColors.primary : AppColors.textMuted,
+              size: 20,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: TextStyle(
+                color: isActive ? AppColors.primary : AppColors.textMuted,
+                fontSize: 10,
+                fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+              ),
+            ),
+          ],
         ),
-        const SizedBox(height: 4),
-        Text(
-          label,
-          style: TextStyle(
-            color: isActive ? AppColors.primary : AppColors.textMuted,
-            fontSize: 10,
-            fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
-          ),
-        ),
-      ],
+      ),
     );
   }
 }

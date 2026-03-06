@@ -24,18 +24,40 @@ class DatabaseService {
   static bool get isLoggedIn => currentUser != null;
 
   // Get recent trainings from the view
-  Future<List<TrainingSummary>> getRecentTrainings() async {
+  Future<List<TrainingSummary>> getRecentTrainings({int limit = 20}) async {
     try {
       final response = await _client
           .from('training_summaries')
           .select()
-          .order('started_at', ascending: false);
+          .order('started_at', ascending: false)
+          .limit(limit);
 
       return (response as List)
           .map((data) => TrainingSummary.fromMap(data))
           .toList();
     } catch (e) {
       debugPrint('Error fetching recent trainings: $e');
+      return [];
+    }
+  }
+
+  // Get trainings for a specific date
+  Future<List<TrainingSummary>> getTrainingsByDate(DateTime date) async {
+    try {
+      final startOfDay = DateTime(date.year, date.month, date.day).toUtc().toIso8601String();
+      final endOfDay =
+          DateTime(date.year, date.month, date.day, 23, 59, 59).toUtc().toIso8601String();
+
+      final response = await _client
+          .from('training_summaries')
+          .select()
+          .gte('started_at', startOfDay)
+          .lte('started_at', endOfDay)
+          .order('started_at', ascending: false);
+
+      return (response as List).map((data) => TrainingSummary.fromMap(data)).toList();
+    } catch (e) {
+      debugPrint('Error fetching trainings by date: $e');
       return [];
     }
   }
