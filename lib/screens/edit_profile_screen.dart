@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../theme.dart';
+import '../services/storage_service.dart';
 
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});
@@ -12,10 +14,14 @@ class EditProfileScreen extends StatefulWidget {
 
 class _EditProfileScreenState extends State<EditProfileScreen> {
   final _supabase = Supabase.instance.client;
+  final _storageService = StorageService();
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
+  final _aliasController = TextEditingController();
   bool _isSaving = false;
+  bool _isUploading = false;
   String _initialEmail = '';
+  String? _avatarUrl;
 
   @override
   void initState() {
@@ -24,44 +30,120 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _nameController.text = user?.userMetadata?['full_name'] ?? '';
     _emailController.text = user?.email ?? '';
     _initialEmail = user?.email ?? '';
+    _fetchProfile();
+  }
+
+  Future<void> _fetchProfile() async {
+    try {
+      final user = _supabase.auth.currentUser;
+      if (user == null) return;
+
+      final data = await _supabase
+          .from('profiles')
+          .select('username, avatar_url')
+          .eq('id', user.id)
+          .maybeSingle();
+
+      if (data != null) {
+        setState(() {
+          if (data['username'] != null) {
+            _aliasController.text = data['username'];
+          }
+          _avatarUrl = data['avatar_url'];
+        });
+      }
+    } catch (e) {
+      debugPrint('Error fetching profile: $e');
+    }
+  }
+
+  Future<void> _pickAndUploadAvatar() async {
+    final imageFile = await _storageService.pickImage();
+    if (imageFile == null) return;
+
+    setState(() => _isUploading = true);
+    try {
+      final url = await _storageService.uploadAvatar(imageFile);
+      if (url != null) {
+        setState(() => _avatarUrl = url);
+        if (mounted) {
+          _showSnackBar('Foto subida correctamente', isError: false);
+        }
+      } else {
+        if (mounted) {
+          _showSnackBar('Error al subir la foto');
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        _showSnackBar('Error: $e');
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isUploading = false);
+      }
+    }
   }
 
   @override
   void dispose() {
     _nameController.dispose();
     _emailController.dispose();
+    _aliasController.dispose();
     super.dispose();
   }
 
   Future<void> _saveChanges() async {
     final newName = _nameController.text.trim();
     final newEmail = _emailController.text.trim();
+    final newAlias = _aliasController.text.trim().toLowerCase();
 
     if (newName.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('El nombre no puede estar vacío')),
-      );
+      _showSnackBar('El nombre no puede estar vacío');
       return;
     }
 
     if (newEmail.isEmpty || !newEmail.contains('@')) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Por favor, ingresa un correo válido')),
-      );
+      _showSnackBar('Por favor, ingresa un correo válido');
+      return;
+    }
+
+    if (newAlias.isNotEmpty && newAlias.length < 3) {
+      _showSnackBar('El alias debe tener al menos 3 caracteres');
       return;
     }
 
     setState(() => _isSaving = true);
 
     try {
+      final user = _supabase.auth.currentUser;
       final emailChanged = newEmail != _initialEmail;
 
+      // Fetch current alias to check for changes if needed for logging/logic
+      final currentAliasData = await _supabase
+          .from('profiles')
+          .select('username')
+          .eq('id', user!.id)
+          .maybeSingle();
+      // ignore: unused_local_variable
+      final currentAlias = currentAliasData?['username'] ?? '';
+
+      // Update Auth Metadata & Email
       await _supabase.auth.updateUser(
         UserAttributes(
           email: emailChanged ? newEmail : null,
           data: {'full_name': newName},
         ),
       );
+
+      // Update Public Profile (Trigger usually handles creation, we handle update here)
+      await _supabase.from('profiles').upsert({
+        'id': user.id,
+        'username': newAlias.isEmpty ? null : newAlias,
+        'full_name': newName,
+        'avatar_url': _avatarUrl,
+        'updated_at': DateTime.now().toIso8601String(),
+      });
 
       if (mounted) {
         String message = 'Perfil actualizado correctamente';
@@ -70,29 +152,35 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               '. Se ha enviado un enlace de confirmación a tu nuevo correo.';
         }
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(message),
-            backgroundColor: AppColors.success,
-            duration: const Duration(seconds: 5),
-          ),
-        );
+        _showSnackBar(message, isError: false);
         Navigator.pop(context, true);
       }
     } catch (e) {
+      String errorMessage = 'Error al actualizar: ${e.toString()}';
+      if (e.toString().contains('unique constraint') ||
+          e.toString().contains('profiles_username_key')) {
+        errorMessage =
+            'El alias "$newAlias" ya está en uso por otro patinador.';
+      }
+
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error al actualizar: ${e.toString()}'),
-            backgroundColor: AppColors.error,
-          ),
-        );
+        _showSnackBar(errorMessage);
       }
     } finally {
       if (mounted) {
         setState(() => _isSaving = false);
       }
     }
+  }
+
+  void _showSnackBar(String message, {bool isError = true}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: isError ? AppColors.error : AppColors.success,
+        duration: Duration(seconds: isError ? 3 : 5),
+      ),
+    );
   }
 
   @override
@@ -113,6 +201,64 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Center(
+              child: Stack(
+                children: [
+                  Container(
+                    width: 120,
+                    height: 120,
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceDark,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: AppColors.primary, width: 2),
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: _isUploading
+                        ? const Center(
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : (_avatarUrl != null && _avatarUrl!.isNotEmpty)
+                        ? CachedNetworkImage(
+                            imageUrl: _avatarUrl!,
+                            fit: BoxFit.cover,
+                            placeholder: (context, url) => const Center(
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                            errorWidget: (context, url, error) => const Icon(
+                              LucideIcons.user,
+                              size: 60,
+                              color: AppColors.textMuted,
+                            ),
+                          )
+                        : const Icon(
+                            LucideIcons.user,
+                            size: 60,
+                            color: AppColors.textMuted,
+                          ),
+                  ),
+                  Positioned(
+                    bottom: 0,
+                    right: 0,
+                    child: GestureDetector(
+                      onTap: _isUploading ? null : _pickAndUploadAvatar,
+                      child: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: const BoxDecoration(
+                          color: AppColors.primary,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          LucideIcons.camera,
+                          color: Colors.white,
+                          size: 20,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 32),
             const Text(
               'Información Personal',
               style: TextStyle(
@@ -123,7 +269,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             ),
             const SizedBox(height: 8),
             const Text(
-              'Actualiza tu nombre y correo para mantener tu perfil al día.',
+              'Actualiza tu identidad para que otros patinadores puedan encontrarte.',
               style: TextStyle(color: AppColors.textMuted),
             ),
             const SizedBox(height: 32),
@@ -132,6 +278,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               controller: _nameController,
               icon: LucideIcons.user,
               hint: 'Ej: Juan Pérez',
+            ),
+            const SizedBox(height: 24),
+            _buildTextField(
+              label: 'Alias Único (Opcional)',
+              controller: _aliasController,
+              icon: LucideIcons.atSign,
+              hint: 'Ej: skater_pro',
             ),
             const SizedBox(height: 24),
             _buildTextField(

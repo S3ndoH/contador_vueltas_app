@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../theme.dart';
 import '../services/database_service.dart';
 import '../models/training_summary.dart';
@@ -14,10 +15,13 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   final _databaseService = DatabaseService();
-  final _user = Supabase.instance.client.auth.currentUser;
+  final _supabase = Supabase.instance.client;
+  User? get _user => _supabase.auth.currentUser;
 
   List<TrainingSummary> _allTrainings = [];
   bool _isLoading = true;
+  String? _username;
+  String? _avatarUrl;
 
   @override
   void initState() {
@@ -27,6 +31,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _loadProfileData() async {
     setState(() => _isLoading = true);
+
+    // Fetch profile data (alias)
+    try {
+      if (_user != null) {
+        final profileData = await _supabase
+            .from('profiles')
+            .select('username, avatar_url')
+            .eq('id', _user!.id)
+            .maybeSingle();
+        if (profileData != null) {
+          setState(() {
+            _username = profileData['username'];
+            _avatarUrl = profileData['avatar_url'];
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('Error loading username: $e');
+    }
+
     // Fetch a large number to calculate aggregate stats for now
     final trainings = await _databaseService.getRecentTrainings(limit: 100);
     if (mounted) {
@@ -87,7 +111,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
 
     if (confirmed == true && mounted) {
-      await Supabase.instance.client.auth.signOut();
+      await _supabase.auth.signOut();
       if (mounted) {
         Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
       }
@@ -109,16 +133,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                children: [
-                  _buildUserHeader(),
-                  const SizedBox(height: 32),
-                  _buildStatsGrid(),
-                  const SizedBox(height: 32),
-                  _buildActionButtons(),
-                ],
+          : RefreshIndicator(
+              onRefresh: _loadProfileData,
+              color: AppColors.primary,
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  children: [
+                    _buildUserHeader(),
+                    const SizedBox(height: 32),
+                    _buildStatsGrid(),
+                    const SizedBox(height: 32),
+                    _buildActionButtons(),
+                  ],
+                ),
               ),
             ),
     );
@@ -135,11 +164,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           width: 100,
           height: 100,
           decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [AppColors.primary, Color(0xFF1D4ED8)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
+            color: AppColors.surfaceDark,
             shape: BoxShape.circle,
             boxShadow: [
               BoxShadow(
@@ -148,24 +173,55 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 offset: const Offset(0, 10),
               ),
             ],
+            border: Border.all(color: AppColors.primary, width: 2),
           ),
-          child: Center(
-            child: Text(
-              initial,
-              style: const TextStyle(
-                fontSize: 40,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
-            ),
-          ),
+          clipBehavior: Clip.antiAlias,
+          child: (_avatarUrl != null && _avatarUrl!.isNotEmpty)
+              ? CachedNetworkImage(
+                  imageUrl: _avatarUrl!,
+                  fit: BoxFit.cover,
+                  placeholder: (context, url) => const Center(
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                  errorWidget: (context, url, error) => Center(
+                    child: Text(
+                      initial,
+                      style: const TextStyle(
+                        fontSize: 40,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                )
+              : Center(
+                  child: Text(
+                    initial,
+                    style: const TextStyle(
+                      fontSize: 40,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
         ),
         const SizedBox(height: 20),
         Text(
           fullName,
           style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
         ),
-        const SizedBox(height: 4),
+        if (_username != null && _username!.isNotEmpty) ...[
+          const SizedBox(height: 4),
+          Text(
+            '@$_username',
+            style: const TextStyle(
+              color: AppColors.primary,
+              fontWeight: FontWeight.w600,
+              fontSize: 16,
+            ),
+          ),
+        ],
+        const SizedBox(height: 8),
         Text(email, style: const TextStyle(color: AppColors.textMuted)),
       ],
     );
