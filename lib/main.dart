@@ -7,6 +7,7 @@ import 'screens/home_screen.dart';
 import 'screens/training_screen.dart';
 import 'screens/calendar_screen.dart';
 import 'screens/profile_screen.dart';
+import 'screens/edit_profile_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -36,6 +37,7 @@ class MyApp extends StatelessWidget {
         '/training': (context) => const TrainingScreen(),
         '/calendar': (context) => const CalendarScreen(),
         '/profile': (context) => const ProfileScreen(),
+        '/edit_profile': (context) => const EditProfileScreen(),
       },
     );
   }

@@ -251,7 +251,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget _buildActionButtons() {
     return Column(
       children: [
-        _buildListButton('Editar Perfil', LucideIcons.user, () {}),
+        _buildListButton('Editar Perfil', LucideIcons.user, () async {
+          final result = await Navigator.pushNamed(context, '/edit_profile');
+          if (result == true) {
+            _loadProfileData();
+          }
+        }),
         const SizedBox(height: 12),
         _buildListButton('Configuración', LucideIcons.settings, () {}),
         const SizedBox(height: 12),
