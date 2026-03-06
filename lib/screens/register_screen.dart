@@ -166,7 +166,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: const Icon(
-                              Icons.fitness_center,
+                              Icons.roller_skating,
                               color: Colors.white,
                               size: 20,
                             ),
