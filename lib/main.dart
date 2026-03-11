@@ -8,6 +8,7 @@ import 'screens/training_screen.dart';
 import 'screens/calendar_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/edit_profile_screen.dart';
+import 'screens/wear/wear_home.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -29,7 +30,7 @@ class MyApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       title: 'LAPCOUNTER',
       theme: appTheme,
-      initialRoute: '/login',
+      home: _getInitialScreen(),
       routes: {
         '/login': (context) => const LoginScreen(),
         '/register': (context) => const RegisterScreen(),
@@ -38,6 +39,20 @@ class MyApp extends StatelessWidget {
         '/calendar': (context) => const CalendarScreen(),
         '/profile': (context) => const ProfileScreen(),
         '/edit_profile': (context) => const EditProfileScreen(),
+        '/wear_home': (context) => const WearHomeScreen(),
+      },
+    );
+  }
+
+  Widget _getInitialScreen() {
+    return Builder(
+      builder: (context) {
+        final double width = MediaQuery.of(context).size.width;
+        // Typical Wear OS screens are small (often < 300dp)
+        if (width > 0 && width < 300) {
+          return const WearHomeScreen();
+        }
+        return const LoginScreen();
       },
     );
   }
