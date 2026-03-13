@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'theme.dart';
+import 'screens/challenges_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/register_screen.dart';
 import 'screens/home_screen.dart';
@@ -40,6 +41,7 @@ class MyApp extends StatelessWidget {
         '/profile': (context) => const ProfileScreen(),
         '/edit_profile': (context) => const EditProfileScreen(),
         '/settings': (context) => const SettingsScreen(),
+        '/challenges': (context) => const ChallengesScreen(),
         '/wear_home': (context) => const WearHomeScreen(),
       },
     );
@@ -53,6 +55,12 @@ class MyApp extends StatelessWidget {
         if (width > 0 && width < 300) {
           return const WearHomeScreen();
         }
+        
+        final session = Supabase.instance.client.auth.currentSession;
+        if (session != null) {
+          return const HomeScreen();
+        }
+
         return const LoginScreen();
       },
     );

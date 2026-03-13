@@ -423,7 +423,9 @@ class _HomeScreenState extends State<HomeScreen> {
               Navigator.pushNamed(context, '/calendar');
             }),
             const SizedBox(width: 40), // Space for FAB
-            _buildNavItem(LucideIcons.trophy, 'Desafíos', false, () {}),
+            _buildNavItem(LucideIcons.trophy, 'Desafíos', false, () {
+              Navigator.pushReplacementNamed(context, '/challenges');
+            }),
             _buildNavItem(LucideIcons.user, 'Perfil', false, () {
               Navigator.pushNamed(context, '/profile');
             }),

@@ -231,7 +231,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                   color: Colors.white,
                 ),
               ),
-              const SizedBox(height: 4),
+              const SizedBox(width: 4),
               Row(
                 children: [
                   const Icon(
