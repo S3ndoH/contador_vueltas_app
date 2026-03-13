@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/training_summary.dart';
 import '../models/lap.dart';
+import '../models/notification_item.dart';
 
 // Result class for synchronization
 final class SyncResult {
@@ -58,6 +59,32 @@ class DatabaseService {
       return (response as List).map((data) => TrainingSummary.fromMap(data)).toList();
     } catch (e) {
       debugPrint('Error fetching trainings by date: $e');
+      return [];
+    }
+  }
+
+  // Get trainings for the current week (Monday to Sunday)
+  Future<List<TrainingSummary>> getTrainingsForCurrentWeek() async {
+    try {
+      final now = DateTime.now();
+      // Calculate the most recent Monday
+      final startOfWeek = now.subtract(Duration(days: now.weekday - 1));
+      final startOfWeekUtc = DateTime(startOfWeek.year, startOfWeek.month, startOfWeek.day).toUtc().toIso8601String();
+      
+      // Calculate Sunday end of day
+      final endOfWeek = startOfWeek.add(const Duration(days: 6));
+      final endOfWeekUtc = DateTime(endOfWeek.year, endOfWeek.month, endOfWeek.day, 23, 59, 59).toUtc().toIso8601String();
+
+      final response = await _client
+          .from('training_summaries')
+          .select()
+          .gte('started_at', startOfWeekUtc)
+          .lte('started_at', endOfWeekUtc)
+          .order('started_at', ascending: false);
+
+      return (response as List).map((data) => TrainingSummary.fromMap(data)).toList();
+    } catch (e) {
+      debugPrint('Error fetching trainings for current week: $e');
       return [];
     }
   }
@@ -289,6 +316,41 @@ class DatabaseService {
         });
       }
       return false;
+    }
+  }
+
+  // --- Notifications ---
+
+  // Get notifications for the current user
+  Future<List<NotificationItem>> getNotifications() async {
+    try {
+      final userId = currentUser?.id;
+      if (userId == null) return [];
+
+      final response = await _client
+          .from('notifications')
+          .select()
+          .eq('user_id', userId)
+          .order('created_at', ascending: false);
+
+      return (response as List)
+          .map((data) => NotificationItem.fromMap(data))
+          .toList();
+    } catch (e) {
+      debugPrint('Error fetching notifications: $e');
+      return [];
+    }
+  }
+
+  // Mark a notification as read
+  Future<void> markNotificationAsRead(String notificationId) async {
+    try {
+      await _client
+          .from('notifications')
+          .update({'is_read': true})
+          .eq('id', notificationId);
+    } catch (e) {
+      debugPrint('Error marking notification as read: $e');
     }
   }
 }

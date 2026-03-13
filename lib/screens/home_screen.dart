@@ -4,6 +4,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:intl/intl.dart';
 import '../theme.dart';
 import '../models/training_summary.dart';
+import '../models/notification_item.dart';
 import '../services/database_service.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -18,6 +19,8 @@ class _HomeScreenState extends State<HomeScreen> {
   final _user = Supabase.instance.client.auth.currentUser;
 
   List<TrainingSummary> _recentTrainings = [];
+  List<NotificationItem> _notifications = [];
+  int _weeklyConsistencyDays = 0;
   bool _isLoading = true;
 
   @override
@@ -28,10 +31,30 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
-    final trainings = await _databaseService.getRecentTrainings(limit: 5);
+    
+    // Fetch both recent trainings for the list and current week trainings for the hero widget
+    final results = await Future.wait([
+      _databaseService.getRecentTrainings(limit: 5),
+      _databaseService.getTrainingsForCurrentWeek(),
+      _databaseService.getNotifications(),
+    ]);
+    
+    final trainings = results[0] as List<TrainingSummary>;
+    final weeklyTrainings = results[1] as List<TrainingSummary>;
+    final notifications = results[2] as List<NotificationItem>;
+    
+    // Calculate unique training days in the current week
+    final uniqueDays = <String>{};
+    for (var t in weeklyTrainings) {
+      final localDate = t.startedAt.toLocal();
+      uniqueDays.add('${localDate.year}-${localDate.month}-${localDate.day}');
+    }
+
     if (mounted) {
       setState(() {
         _recentTrainings = trainings;
+        _notifications = notifications;
+        _weeklyConsistencyDays = uniqueDays.length;
         _isLoading = false;
       });
     }
@@ -110,18 +133,249 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildNotificationIcon() {
-    return Container(
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceDark,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+    final hasUnread = _notifications.any((n) => !n.isRead);
+    return InkWell(
+      onTap: () => _showNotificationsPanel(context),
+      borderRadius: BorderRadius.circular(16),
+      child: Stack(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: AppColors.surfaceDark,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+            ),
+            child: const Icon(LucideIcons.bell, color: Colors.white, size: 20),
+          ),
+          if (hasUnread)
+            Positioned(
+              right: 8,
+              top: 8,
+              child: Container(
+                width: 10,
+                height: 10,
+                decoration: BoxDecoration(
+                  color: AppColors.error, // Red badge indicating new notifications
+                  shape: BoxShape.circle,
+                  border: Border.all(color: AppColors.surfaceDark, width: 2),
+                ),
+              ),
+            ),
+        ],
       ),
-      child: const Icon(LucideIcons.bell, color: Colors.white, size: 20),
+    );
+  }
+
+  void _showNotificationsPanel(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setModalState) {
+            return Container(
+              height: MediaQuery.of(context).size.height * 0.6,
+              decoration: const BoxDecoration(
+                color: AppColors.backgroundDark,
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(24),
+                  topRight: Radius.circular(24),
+                ),
+              ),
+              child: Column(
+                children: [
+                  // Handle bar
+                  Container(
+                    margin: const EdgeInsets.symmetric(vertical: 12),
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                    child: Row(
+                      children: [
+                        Text(
+                          'Notificaciones',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Divider(color: Colors.white12),
+                  Expanded(
+                    child: _notifications.isEmpty
+                        ? const Center(
+                            child: Text(
+                              'No tienes notificaciones aún',
+                              style: TextStyle(color: Colors.white54, fontSize: 16),
+                            ),
+                          )
+                        : ListView.builder(
+                            padding: const EdgeInsets.all(24),
+                            itemCount: _notifications.length,
+                            itemBuilder: (context, index) {
+                              final n = _notifications[index];
+                              final timeDiff = DateTime.now().difference(n.createdAt);
+                              String timeStr = '';
+                              if (timeDiff.inDays > 0) {
+                                timeStr = 'Hace ${timeDiff.inDays} d';
+                              } else if (timeDiff.inHours > 0) {
+                                timeStr = 'Hace ${timeDiff.inHours} h';
+                              } else if (timeDiff.inMinutes > 0) {
+                                timeStr = 'Hace ${timeDiff.inMinutes} min';
+                              } else {
+                                timeStr = 'Justo ahora';
+                              }
+
+                              return InkWell(
+                                onTap: () async {
+                                  if (!n.isRead) {
+                                    // Make call to DB, doesn't need to block UI
+                                    _databaseService.markNotificationAsRead(n.id);
+                                    
+                                    // Update local state instantly
+                                    setModalState(() {
+                                      _notifications[index] = NotificationItem(
+                                        id: n.id,
+                                        title: n.title,
+                                        description: n.description,
+                                        iconName: n.iconName,
+                                        iconColorHex: n.iconColorHex,
+                                        isRead: true,
+                                        createdAt: n.createdAt,
+                                      );
+                                    });
+                                  }
+                                },
+                                borderRadius: BorderRadius.circular(20),
+                                child: _buildNotificationItem(
+                                  icon: _getIconFromName(n.iconName),
+                                  iconColor: n.iconColor,
+                                  title: n.title,
+                                  description: n.description,
+                                  time: timeStr,
+                                  isUnread: !n.isRead,
+                                ),
+                              );
+                            },
+                          ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    ).whenComplete(() {
+      setState(() {});
+    });
+  }
+
+  IconData _getIconFromName(String name) {
+    switch (name) {
+      case 'zap': return LucideIcons.zap;
+      case 'settings': return LucideIcons.settings;
+      case 'award': return LucideIcons.award;
+      case 'info': return LucideIcons.info;
+      default: return LucideIcons.bell;
+    }
+  }
+
+  Widget _buildNotificationItem({
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    required String description,
+    required String time,
+    required bool isUnread,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isUnread ? AppColors.surfaceDark.withValues(alpha: 0.8) : AppColors.surfaceDark.withValues(alpha: 0.3),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: isUnread ? iconColor.withValues(alpha: 0.3) : Colors.white.withValues(alpha: 0.05)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: iconColor.withValues(alpha: 0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: iconColor, size: 20),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        title,
+                        style: TextStyle(
+                          fontWeight: isUnread ? FontWeight.bold : FontWeight.w600,
+                          fontSize: 16,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                    if (isUnread)
+                      Container(
+                        width: 8,
+                        height: 8,
+                        decoration: const BoxDecoration(
+                          color: AppColors.error,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  description,
+                  style: TextStyle(
+                    color: AppColors.textMuted,
+                    fontSize: 14,
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  time,
+                  style: TextStyle(
+                    color: AppColors.textMuted.withValues(alpha: 0.5),
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
   Widget _buildWelcomeHero() {
+    final goalDays = 4;
+    final progress = (_weeklyConsistencyDays / goalDays).clamp(0.0, 1.0);
+    
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24.0),
       child: Container(
@@ -169,7 +423,7 @@ class _HomeScreenState extends State<HomeScreen> {
               children: [
                 Expanded(
                   child: LinearProgressIndicator(
-                    value: 0.6,
+                    value: progress,
                     backgroundColor: Colors.white24,
                     valueColor: const AlwaysStoppedAnimation<Color>(
                       Colors.white,
@@ -178,9 +432,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
                 const SizedBox(width: 12),
-                const Text(
-                  '3/5',
-                  style: TextStyle(
+                Text(
+                  '$_weeklyConsistencyDays/$goalDays',
+                  style: const TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.bold,
                   ),
