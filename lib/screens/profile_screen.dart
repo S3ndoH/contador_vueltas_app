@@ -314,8 +314,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
           }
         }),
         const SizedBox(height: 12),
-        _buildListButton('Configuración', LucideIcons.settings, () {}),
-        const SizedBox(height: 12),
+        _buildListButton('Configuración', LucideIcons.settings, () {
+          Navigator.pushNamed(context, '/settings');
+        }),        const SizedBox(height: 12),
         _buildListButton(
           'Cerrar Sesión',
           LucideIcons.logOut,

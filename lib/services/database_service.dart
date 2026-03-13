@@ -94,9 +94,12 @@ class DatabaseService {
 
   // Create a new training session
   Future<String?> createTraining({
-    int trackLengthMeters = 200,
+    int? trackLengthMeters,
     String? description,
   }) async {
+    final prefs = await SharedPreferences.getInstance();
+    final int lengthToUse = trackLengthMeters ?? prefs.getInt('default_track_length') ?? 200;
+    
     final startTime = DateTime.now().toUtc().toIso8601String();
     final userId = _client.auth.currentUser?.id;
 
@@ -106,7 +109,7 @@ class DatabaseService {
         final tempId = 'local_${DateTime.now().millisecondsSinceEpoch}';
         await savePendingTraining({
           'tempId': tempId,
-          'track_length_meters': trackLengthMeters,
+          'track_length_meters': lengthToUse,
           'description': description,
           'started_at': startTime,
           'laps': [],
@@ -118,7 +121,7 @@ class DatabaseService {
           .from('trainings')
           .insert({
             'user_id': userId,
-            'track_length_meters': trackLengthMeters,
+            'track_length_meters': lengthToUse,
             'description': description,
             'started_at': startTime,
           })
@@ -132,7 +135,7 @@ class DatabaseService {
       final tempId = 'local_${DateTime.now().millisecondsSinceEpoch}';
       await savePendingTraining({
         'tempId': tempId,
-        'track_length_meters': trackLengthMeters,
+        'track_length_meters': lengthToUse,
         'description': description,
         'started_at': startTime,
         'laps': [],

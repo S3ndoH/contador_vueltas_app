@@ -8,8 +8,8 @@ import 'screens/training_screen.dart';
 import 'screens/calendar_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/edit_profile_screen.dart';
+import 'screens/settings_screen.dart';
 import 'screens/wear/wear_home.dart';
-
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -39,6 +39,7 @@ class MyApp extends StatelessWidget {
         '/calendar': (context) => const CalendarScreen(),
         '/profile': (context) => const ProfileScreen(),
         '/edit_profile': (context) => const EditProfileScreen(),
+        '/settings': (context) => const SettingsScreen(),
         '/wear_home': (context) => const WearHomeScreen(),
       },
     );
