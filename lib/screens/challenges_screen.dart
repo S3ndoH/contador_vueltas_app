@@ -328,12 +328,12 @@ class _ChallengesScreenState extends State<ChallengesScreen> {
               Navigator.pushReplacementNamed(context, '/home');
             }),
             _buildNavItem(LucideIcons.calendar, 'Calendario', false, () {
-              Navigator.pushReplacementNamed(context, '/calendar');
+              Navigator.pushNamed(context, '/calendar');
             }),
             const SizedBox(width: 40), // Space for FAB
             _buildNavItem(LucideIcons.trophy, 'Desafíos', true, () {}),
             _buildNavItem(LucideIcons.user, 'Perfil', false, () {
-              Navigator.pushReplacementNamed(context, '/profile');
+              Navigator.pushNamed(context, '/profile');
             }),
           ],
         ),
