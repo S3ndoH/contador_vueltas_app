@@ -11,6 +11,7 @@ import 'screens/profile_screen.dart';
 import 'screens/edit_profile_screen.dart';
 import 'screens/settings_screen.dart';
 import 'screens/wear/wear_home.dart';
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -22,8 +23,15 @@ void main() async {
   runApp(const MyApp());
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  bool? _isWear;
 
   @override
   Widget build(BuildContext context) {
@@ -31,7 +39,13 @@ class MyApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       title: 'LAPCOUNTER',
       theme: appTheme,
-      home: _getInitialScreen(),
+      home: _isWear == null
+          ? DeviceDetectionSplash(
+              onDetected: (isWear) {
+                setState(() => _isWear = isWear);
+              },
+            )
+          : _getInitialScreen(),
       routes: {
         '/login': (context) => const LoginScreen(),
         '/register': (context) => const RegisterScreen(),
@@ -48,21 +62,47 @@ class MyApp extends StatelessWidget {
   }
 
   Widget _getInitialScreen() {
-    return Builder(
-      builder: (context) {
-        final double width = MediaQuery.of(context).size.width;
-        // Typical Wear OS screens are small (often < 300dp)
-        if (width > 0 && width < 300) {
-          return const WearHomeScreen();
-        }
-        
-        final session = Supabase.instance.client.auth.currentSession;
-        if (session != null) {
-          return const HomeScreen();
-        }
+    final session = Supabase.instance.client.auth.currentSession;
+    if (_isWear == true) {
+      return const WearHomeScreen();
+    } else {
+      return session != null ? const HomeScreen() : const LoginScreen();
+    }
+  }
+}
 
-        return const LoginScreen();
-      },
+class DeviceDetectionSplash extends StatefulWidget {
+  final Function(bool) onDetected;
+
+  const DeviceDetectionSplash({super.key, required this.onDetected});
+
+  @override
+  State<DeviceDetectionSplash> createState() => _DeviceDetectionSplashState();
+}
+
+class _DeviceDetectionSplashState extends State<DeviceDetectionSplash> {
+  bool? _isWear;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          if (_isWear == null && constraints.maxWidth > 0) {
+            final isWear = constraints.maxWidth < 330;
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted && _isWear == null) {
+                setState(() => _isWear = isWear);
+                widget.onDetected(isWear);
+              }
+            });
+          }
+          return const Center(
+            child: CircularProgressIndicator(color: AppColors.primary),
+          );
+        },
+      ),
     );
   }
 }

@@ -4,6 +4,13 @@ import 'package:lucide_icons/lucide_icons.dart';
 import '../../theme.dart';
 import 'wear_home.dart';
 
+/// Almacenamiento persistente para los controladores de autenticación.
+/// Esto evita que el texto se pierda si la pantalla se reconstruye por el teclado.
+class _AuthStorage {
+  static final emailController = TextEditingController();
+  static final passwordController = TextEditingController();
+}
+
 class WearLoginScreen extends StatefulWidget {
   const WearLoginScreen({super.key});
 
@@ -12,16 +19,23 @@ class WearLoginScreen extends StatefulWidget {
 }
 
 class _WearLoginScreenState extends State<WearLoginScreen> {
-  final _emailController = TextEditingController();
-  final _passwordController = TextEditingController();
+  final _emailFocus = FocusNode();
+  final _passwordFocus = FocusNode();
   bool _isLoading = false;
+
+  @override
+  void dispose() {
+    _emailFocus.dispose();
+    _passwordFocus.dispose();
+    super.dispose();
+  }
 
   Future<void> _signIn() async {
     setState(() => _isLoading = true);
     try {
       await Supabase.instance.client.auth.signInWithPassword(
-        email: _emailController.text.trim(),
-        password: _passwordController.text.trim(),
+        email: _AuthStorage.emailController.text.trim(),
+        password: _AuthStorage.passwordController.text.trim(),
       );
       if (mounted) {
         Navigator.pushReplacement(
@@ -43,72 +57,96 @@ class _WearLoginScreenState extends State<WearLoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black,
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(12),
+      resizeToAvoidBottomInset: false, // PREVENIR RESIZE QUE MATA EL TECLADO
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisAlignment: MainAxisAlignment.start,
           children: [
-            const Icon(
-              LucideIcons.shieldCheck,
-              color: AppColors.primary,
-              size: 24,
-            ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 12),
+            const Icon(LucideIcons.shieldCheck, color: AppColors.primary, size: 20),
+            const SizedBox(height: 2),
             const Text(
               'VINCULAR CUENTA',
               style: TextStyle(
                 color: Colors.white,
-                fontSize: 10,
+                fontSize: 9,
                 fontWeight: FontWeight.bold,
               ),
             ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _emailController,
-              style: const TextStyle(color: Colors.white, fontSize: 12),
-              decoration: const InputDecoration(
-                hintText: 'Email',
-                hintStyle: TextStyle(color: Colors.white24),
-                isDense: true,
-                contentPadding: EdgeInsets.symmetric(
-                  vertical: 8,
-                  horizontal: 8,
-                ),
-                border: OutlineInputBorder(),
-              ),
+            const SizedBox(height: 6),
+            
+            // EMAIL FIELD con ValueListenableBuilder para refresco ATÓMICO
+            ValueListenableBuilder(
+              valueListenable: _AuthStorage.emailController,
+              builder: (context, value, _) {
+                return TextField(
+                  controller: _AuthStorage.emailController,
+                  focusNode: _emailFocus,
+                  keyboardType: TextInputType.emailAddress,
+                  textInputAction: TextInputAction.next,
+                  autocorrect: false,
+                  enableSuggestions: false,
+                  style: const TextStyle(color: Colors.white, fontSize: 11),
+                  decoration: const InputDecoration(
+                    hintText: 'Email',
+                    hintStyle: TextStyle(color: Colors.white24),
+                    isDense: true,
+                    contentPadding: EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+                    border: OutlineInputBorder(),
+                  ),
+                  onSubmitted: (_) {
+                    _emailFocus.unfocus();
+                    FocusScope.of(context).requestFocus(_passwordFocus);
+                  },
+                );
+              },
             ),
+            
             const SizedBox(height: 4),
-            TextField(
-              controller: _passwordController,
-              obscureText: true,
-              style: const TextStyle(color: Colors.white, fontSize: 12),
-              decoration: const InputDecoration(
-                hintText: 'Contraseña',
-                hintStyle: TextStyle(color: Colors.white24),
-                isDense: true,
-                contentPadding: EdgeInsets.symmetric(
-                  vertical: 8,
-                  horizontal: 8,
-                ),
-                border: OutlineInputBorder(),
-              ),
+            
+            // PASSWORD FIELD con ValueListenableBuilder para refresco ATÓMICO
+            ValueListenableBuilder(
+              valueListenable: _AuthStorage.passwordController,
+              builder: (context, value, _) {
+                return TextField(
+                  controller: _AuthStorage.passwordController,
+                  focusNode: _passwordFocus,
+                  obscureText: true,
+                  textInputAction: TextInputAction.done,
+                  autocorrect: false,
+                  enableSuggestions: false,
+                  style: const TextStyle(color: Colors.white, fontSize: 11),
+                  decoration: const InputDecoration(
+                    hintText: 'Contraseña',
+                    hintStyle: TextStyle(color: Colors.white24),
+                    isDense: true,
+                    contentPadding: EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+                    border: OutlineInputBorder(),
+                  ),
+                );
+              },
             ),
-            const SizedBox(height: 8),
+            
+            const SizedBox(height: 6),
             _isLoading
-                ? const CircularProgressIndicator()
+                ? const SizedBox(
+                    height: 24,
+                    width: 24,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
                 : SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
                       onPressed: _signIn,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.primary,
-                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        padding: const EdgeInsets.symmetric(vertical: 6),
+                        minimumSize: const Size(0, 32),
                       ),
-                      child: const Text(
-                        'INGRESAR',
-                        style: TextStyle(fontSize: 12),
-                      ),
+                      child: const Text('INGRESAR', style: TextStyle(fontSize: 11)),
                     ),
                   ),
           ],

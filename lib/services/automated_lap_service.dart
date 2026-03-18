@@ -20,34 +20,32 @@ class AutomatedLapService {
 
   /// Define la posición actual como la línea de meta
   Future<void> setFinishLine() async {
-    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
-      throw Exception('Activa el GPS/Ubicación en los ajustes del reloj primero.');
-    }
-
-    // Asegurarse de que tenemos permisos
+    // Intentar pedir permisos primero, a veces esto activa el estado del servicio en Wear OS
     LocationPermission permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied) {
-        throw Exception('Location permissions are denied');
-      }
     }
     
     if (permission == LocationPermission.deniedForever) {
-      throw Exception('Location permissions are permanently denied, we cannot request permissions.');
+      throw Exception('Permisos de ubicación denegados permanentemente.');
     }
+
+    // Ya no bloqueamos aquí con isLocationServiceEnabled porque falla mucho en relojes
+    // En su lugar, intentamos obtener la posición directamente.
 
     try {
       _finishLine = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high, // 'high' suele conseguir señal más rápido que 'bestForNavigation'
+        locationSettings: AndroidSettings(
+          accuracy: LocationAccuracy.best,
+          forceLocationManager: true, // Mejor para Wear OS (Galaxy Watch)
+          intervalDuration: const Duration(seconds: 1),
         ),
-      ).timeout(const Duration(seconds: 60)); // 60 segundos porque un GPS en frío tarda mucho
+      ).timeout(const Duration(seconds: 45));
     } on TimeoutException {
-      throw Exception('No hay señal GPS (Timeout 60s). Aléjate de edificios altos.');
+      throw Exception('TIMEOUT: Sin señal GPS. Sal a un lugar abierto.');
     } catch (e) {
-      throw Exception('Error al obtener ubicación: $e');
+      // Si el servicio realmente está apagado, esto lanzará el PlatformException que ya sabemos manejar
+      rethrow;
     }
   }
 

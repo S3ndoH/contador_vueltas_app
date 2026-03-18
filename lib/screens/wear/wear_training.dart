@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:wear_plus/wear_plus.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:geolocator/geolocator.dart';
 import '../../theme.dart';
 import '../../services/database_service.dart';
 import '../../services/automated_lap_service.dart';
@@ -170,7 +171,7 @@ class _WearTrainingScreenState extends State<WearTrainingScreen> {
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: AppColors.warning.withOpacity(0.5),
+                          color: AppColors.warning.withValues(alpha: 0.5),
                           blurRadius: 15,
                           spreadRadius: 2,
                         ),
@@ -199,14 +200,29 @@ class _WearTrainingScreenState extends State<WearTrainingScreen> {
                   const SizedBox(height: 8),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                    child: Text(
-                      _errorMessage!,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        color: AppColors.error,
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                      ),
+                    child: Column(
+                      children: [
+                        Text(
+                          _errorMessage!.toUpperCase(),
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            color: AppColors.error,
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        if (_errorMessage!.contains('LOCATION_SERVICES_DISABLED'))
+                          ElevatedButton(
+                            onPressed: () => Geolocator.openLocationSettings(),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.surfaceDark,
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              minimumSize: const Size(60, 24),
+                            ),
+                            child: const Text('AJUSTES', style: TextStyle(fontSize: 9)),
+                          ),
+                      ],
                     ),
                   ),
                 ],
