@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'dart:math' as math;
 import '../../theme.dart';
 import 'wear_home.dart';
 
@@ -9,6 +10,22 @@ import 'wear_home.dart';
 class _AuthStorage {
   static final emailController = TextEditingController();
   static final passwordController = TextEditingController();
+}
+
+/// Pintor que genera ruido visual microscópico para forzar el redibujado de la GPU.
+class _ChaosPainter extends CustomPainter {
+  final double pulse;
+  _ChaosPainter(this.pulse);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Color.fromARGB(1, math.Random().nextInt(255), 0, 0); // 1/255 de opacidad
+    canvas.drawRect(const Rect.fromLTWH(0, 0, 1, 1), paint);
+  }
+
+  @override
+  bool shouldRepaint(_ChaosPainter oldDelegate) => true;
 }
 
 class WearLoginScreen extends StatefulWidget {
@@ -21,28 +38,28 @@ class WearLoginScreen extends StatefulWidget {
 class _WearLoginScreenState extends State<WearLoginScreen> with SingleTickerProviderStateMixin {
   final _emailFocus = FocusNode();
   final _passwordFocus = FocusNode();
+  final _scrollController = ScrollController();
   bool _isLoading = false;
-  late AnimationController _pulseController;
+  late AnimationController _frameController;
 
   @override
   void initState() {
     super.initState();
-    // PULSO DIGITAL: Forzamos redibujado de hardware cada 500ms sutilmente
-    _pulseController = AnimationController(
+    // FRAME FORCER v8: 60fps de invalidación de buffer
+    _frameController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 500),
-    )..repeat(reverse: true);
+      duration: const Duration(milliseconds: 16),
+    )..repeat();
 
-    // Escuchadores manuales para no recrear los campos de texto inútilmente
     _AuthStorage.emailController.addListener(_onTextChanged);
     _AuthStorage.passwordController.addListener(_onTextChanged);
   }
 
   void _onTextChanged() {
     if (mounted) {
-      // Sincronización explícita de cursor para forzar al IME a reconocer el cambio
-      if (_AuthStorage.emailController.selection.baseOffset < _AuthStorage.emailController.text.length) {
-         // Solo forzamos si el teclado parece haber perdido el hilo
+      // Forzado físico de layout en cada letra
+      if (_scrollController.hasClients) {
+        _scrollController.jumpTo(_scrollController.offset + 0.001);
       }
       setState(() {});
     }
@@ -52,7 +69,8 @@ class _WearLoginScreenState extends State<WearLoginScreen> with SingleTickerProv
   void dispose() {
     _AuthStorage.emailController.removeListener(_onTextChanged);
     _AuthStorage.passwordController.removeListener(_onTextChanged);
-    _pulseController.dispose();
+    _frameController.dispose();
+    _scrollController.dispose();
     _emailFocus.dispose();
     _passwordFocus.dispose();
     super.dispose();
@@ -73,9 +91,9 @@ class _WearLoginScreenState extends State<WearLoginScreen> with SingleTickerProv
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error: ${e.toString()}')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: ${e.toString()}'))
+        );
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -85,101 +103,100 @@ class _WearLoginScreenState extends State<WearLoginScreen> with SingleTickerProv
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      resizeToAvoidBottomInset: false,
       backgroundColor: Colors.black,
-      body: AnimatedBuilder(
-        animation: _pulseController,
-        builder: (context, child) {
-          // Pulso de opacidad invisible al ojo (0.999 a 1.0) pero obliga al GPU a repintar
-          return Opacity(
-            opacity: 0.999 + (_pulseController.value * 0.001),
-            child: child,
-          );
-        },
-        child: Container(
-          width: double.infinity,
-          height: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.start,
-            children: [
-              const SizedBox(height: 12),
-              const Icon(LucideIcons.shieldCheck, color: AppColors.primary, size: 20),
-              const SizedBox(height: 2),
-              const Text(
-                'VINCULAR CUENTA',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 9,
-                  fontWeight: FontWeight.bold,
-                ),
+      body: Stack(
+        children: [
+          // CAPA CHAOS: Fuerza al compositor de Wear OS a tratar la pantalla como "volátil"
+          Positioned.fill(
+            child: AnimatedBuilder(
+              animation: _frameController,
+              builder: (context, _) => CustomPaint(
+                painter: _ChaosPainter(_frameController.value),
               ),
-              const SizedBox(height: 6),
-              
-              // CAMPO EMAIL: Estacionario (Sin builders que lo rodeen)
-              TextField(
-                controller: _AuthStorage.emailController,
-                focusNode: _emailFocus,
-                keyboardType: TextInputType.emailAddress,
-                textInputAction: TextInputAction.next,
-                autocorrect: false,
-                enableSuggestions: false,
-                style: const TextStyle(color: Colors.white, fontSize: 11),
-                decoration: const InputDecoration(
-                  hintText: 'Email',
-                  hintStyle: TextStyle(color: Colors.white24),
-                  isDense: true,
-                  contentPadding: EdgeInsets.symmetric(vertical: 6, horizontal: 8),
-                  border: OutlineInputBorder(),
-                ),
-                onSubmitted: (_) {
-                  _emailFocus.unfocus();
-                  FocusScope.of(context).requestFocus(_passwordFocus);
-                },
-              ),
-              
-              const SizedBox(height: 4),
-              
-              // CAMPO PASSWORD: Estacionario
-              TextField(
-                controller: _AuthStorage.passwordController,
-                focusNode: _passwordFocus,
-                obscureText: true,
-                textInputAction: TextInputAction.done,
-                autocorrect: false,
-                enableSuggestions: false,
-                style: const TextStyle(color: Colors.white, fontSize: 11),
-                decoration: const InputDecoration(
-                  hintText: 'Contraseña',
-                  hintStyle: TextStyle(color: Colors.white24),
-                  isDense: true,
-                  contentPadding: EdgeInsets.symmetric(vertical: 6, horizontal: 8),
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              
-              const SizedBox(height: 6),
-              _isLoading
-                  ? const SizedBox(
-                      height: 24,
-                      width: 24,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: _signIn,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.primary,
-                          padding: const EdgeInsets.symmetric(vertical: 6),
-                          minimumSize: const Size(0, 32),
-                        ),
-                        child: const Text('INGRESAR', style: TextStyle(fontSize: 11)),
-                      ),
-                    ),
-            ],
+            ),
           ),
-        ),
+          
+          SafeArea(
+            child: SingleChildScrollView(
+              controller: _scrollController,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(LucideIcons.shieldAlert, color: AppColors.primary, size: 18),
+                  const SizedBox(height: 4),
+                  
+                  // ESPEJO EMAIL (Identidad dinámica via Key)
+                  Container(
+                    key: ValueKey('mirror_email_${_AuthStorage.emailController.text.length}'),
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      _AuthStorage.emailController.text.isEmpty ? 'EMAIL...' : _AuthStorage.emailController.text,
+                      style: const TextStyle(color: AppColors.primary, fontSize: 10, fontWeight: FontWeight.bold),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  TextField(
+                    controller: _AuthStorage.emailController,
+                    focusNode: _emailFocus,
+                    style: const TextStyle(color: Colors.white, fontSize: 12),
+                    decoration: const InputDecoration(
+                      hintText: 'Escriba aquí',
+                      isDense: true,
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+
+                  const SizedBox(height: 10),
+
+                  // ESPEJO PASSWORD (Identidad dinámica)
+                  Container(
+                    key: ValueKey('mirror_pass_${_AuthStorage.passwordController.text.length}'),
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      _AuthStorage.passwordController.text.isEmpty ? 'PASSWORD...' : '*' * _AuthStorage.passwordController.text.length,
+                      style: const TextStyle(color: AppColors.primary, fontSize: 10, fontWeight: FontWeight.bold),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  TextField(
+                    controller: _AuthStorage.passwordController,
+                    focusNode: _passwordFocus,
+                    obscureText: true,
+                    style: const TextStyle(color: Colors.white, fontSize: 12),
+                    decoration: const InputDecoration(
+                      hintText: 'Clave',
+                      isDense: true,
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+
+                  const SizedBox(height: 12),
+                  _isLoading
+                      ? const CircularProgressIndicator()
+                      : ElevatedButton(
+                          onPressed: _signIn,
+                          style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+                          child: const Text('INGRESAR', style: TextStyle(fontSize: 10)),
+                        ),
+                  const SizedBox(height: 50),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
