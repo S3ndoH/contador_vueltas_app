@@ -79,7 +79,7 @@ class _WearLoginScreenState extends State<WearLoginScreen> with SingleTickerProv
     return Scaffold(
       backgroundColor: Colors.black,
       resizeToAvoidBottomInset: false, 
-      // RECONSTRUCTOR NUCLEAR: Obliga a Flutter a Re-construir TODO en cada frame
+      // RECONSTRUCTOR NUCLEAR: Obliga a Flutter a Re-construir la pantalla en cada frame
       body: AnimatedBuilder(
         animation: Listenable.merge([_nuclearController, _emailController, _passwordController]),
         builder: (context, child) {
