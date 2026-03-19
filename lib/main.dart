@@ -11,6 +11,7 @@ import 'screens/profile_screen.dart';
 import 'screens/edit_profile_screen.dart';
 import 'screens/settings_screen.dart';
 import 'screens/wear/wear_home.dart';
+import 'services/wear_sync_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -19,6 +20,9 @@ void main() async {
     url: 'https://rwxsccdnidvihkjbapld.supabase.co',
     anonKey: 'sb_publishable_j3LDvViDYaTdDU9Mcox9zQ_wgrk8GsA',
   );
+
+  // INITIALIZE WEAR SYNC
+  WearSyncService().init();
 
   runApp(const MyApp());
 }

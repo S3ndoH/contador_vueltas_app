@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../theme.dart';
+import '../services/wear_sync_service.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -212,6 +213,77 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       const SizedBox(width: 8),
                       _buildCustomTrackButton(),
                     ],
+                  ),
+                ],
+              ),
+            ),
+            
+            const SizedBox(height: 48),
+
+            // Wear OS Sync Section
+            const Row(
+              children: [
+                Icon(Icons.watch, color: AppColors.primary, size: 24),
+                SizedBox(width: 12),
+                Text(
+                  'Reloj (Wear OS)',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceDark,
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Sincronización de Sesión',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Si tu reloj no ha iniciado sesión automáticamente, puedes forzar la sincronización aquí.',
+                    style: TextStyle(color: AppColors.textMuted, fontSize: 14),
+                  ),
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: () async {
+                        final success = await WearSyncService().syncCurrentSession();
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(success 
+                              ? '¡Sincronización enviada al reloj!' 
+                              : 'Error al sincronizar. Asegúrate de que el reloj esté cerca.'),
+                            backgroundColor: success ? Colors.green : Colors.red,
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.sync, size: 20),
+                      label: const Text('Sincronizar mi Reloj', style: TextStyle(fontWeight: FontWeight.bold)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      ),
+                    ),
                   ),
                 ],
               ),
