@@ -83,20 +83,26 @@ class WearSyncService {
   /// Sends the current session tokens if available
   Future<bool> syncCurrentSession() async {
     try {
+      // FIX (v9): Force session refresh on the phone to get a brand new, UNUSED refresh token.
+      // Supabase refresh tokens are one-time use (rotation), so if the phone already used it, 
+      // the watch will fail with 400 unless we get a fresh one.
+      debugPrint("WearSyncService: Refrescando sesión antes de enviar al reloj...");
+      await Supabase.instance.client.auth.refreshSession();
+
       final session = Supabase.instance.client.auth.currentSession;
       if (session != null) {
         final accessToken = session.accessToken;
         final refreshToken = session.refreshToken;
         
         if (refreshToken != null) {
-          print("WearSyncService: Sincronizando tokens directamente...");
+          debugPrint("WearSyncService: Sincronizando tokens frescos...");
           return await sendTokenToWatch(accessToken, refreshToken);
         }
       } else {
-        print("WearSyncService: No hay sesión activa para sincronizar.");
+        debugPrint("WearSyncService: No hay sesión activa para sincronizar.");
       }
     } catch (e) {
-      print("WearSyncService: Error en syncCurrentSession: $e");
+      debugPrint("WearSyncService: Error en syncCurrentSession: $e");
     }
     return false;
   }
