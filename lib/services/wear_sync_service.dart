@@ -88,6 +88,9 @@ class WearSyncService {
       // the watch will fail with 400 unless we get a fresh one.
       debugPrint("WearSyncService: Refrescando sesión antes de enviar al reloj...");
       await Supabase.instance.client.auth.refreshSession();
+      
+      // Pequeña pausa para asegurar que el estado de Supabase sea consistente
+      await Future.delayed(const Duration(milliseconds: 200));
 
       final session = Supabase.instance.client.auth.currentSession;
       if (session != null) {
@@ -95,11 +98,13 @@ class WearSyncService {
         final refreshToken = session.refreshToken;
         
         if (refreshToken != null) {
-          debugPrint("WearSyncService: Sincronizando tokens frescos...");
-          return await sendTokenToWatch(accessToken, refreshToken);
+          debugPrint("WearSyncService: Enviando tokens frescos al reloj...");
+          final success = await sendTokenToWatch(accessToken, refreshToken);
+          debugPrint("WearSyncService: Resultado del envío: $success");
+          return success;
         }
       } else {
-        debugPrint("WearSyncService: No hay sesión activa para sincronizar.");
+        debugPrint("WearSyncService: No hay sesión activa tras el refresco.");
       }
     } catch (e) {
       debugPrint("WearSyncService: Error en syncCurrentSession: $e");

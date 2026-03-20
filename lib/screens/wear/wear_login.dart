@@ -20,6 +20,7 @@ class _WearLoginScreenState extends State<WearLoginScreen> {
   final _passwordFocus = FocusNode();
   
   bool _isLoading = false;
+  bool _isProcessingSync = false;
   StreamSubscription? _syncSubscription;
 
   @override
@@ -41,18 +42,30 @@ class _WearLoginScreenState extends State<WearLoginScreen> {
 
   Future<void> _onTokenReceived(Map<String, String> tokens) async {
     if (!mounted) return;
+    if (_isProcessingSync) {
+      debugPrint("WearLoginScreen: Ignorando sync paralelo en curso.");
+      return;
+    }
+
+    _isProcessingSync = true;
     setState(() => _isLoading = true);
     
     final accessToken = tokens['accessToken'];
     final refreshToken = tokens['refreshToken'];
     
-    debugPrint("WearLoginScreen: Procesando tokens v7...");
-    debugPrint("WearLoginScreen: RefreshToken length = ${refreshToken?.length}");
+    debugPrint("WearLoginScreen: Procesando tokens v10...");
     
     try {
       if (refreshToken != null) {
-        // En v7 usamos setSession con el refreshToken directamente
-        // setSession en Supabase 2.x restaura la sesión usando el token.
+        // Verificar si ya estamos logueados con una sesión válida
+        final currentSession = Supabase.instance.client.auth.currentSession;
+        if (currentSession != null) {
+          debugPrint("WearLoginScreen: Ya existe una sesión activa. Verificando integridad...");
+          // Si ya estamos logueados, podríamos ignorar o re-setear si es necesario.
+          // Por seguridad en v10, intentamos setSession pero atrapamos errores de "token ya usado"
+          // si el usuario ya está dentro.
+        }
+
         await Supabase.instance.client.auth.setSession(refreshToken);
         
         // v8: Limpiamos el token del Data Layer para que no se re-procese tras un logout
@@ -86,6 +99,7 @@ class _WearLoginScreenState extends State<WearLoginScreen> {
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
+      _isProcessingSync = false;
     }
   }
 

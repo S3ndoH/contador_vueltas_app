@@ -108,19 +108,41 @@ class MainActivity : FlutterActivity(), DataClient.OnDataChangedListener, Messag
                 Log.d("WearSync", "Data Layer: Item guardado exitosamente")
             }
 
-        // 2. MessageClient (Instant signaling) with Base64 to avoid character issues
+        // 2. MessageClient (Instant signaling)
         Wearable.getNodeClient(this).connectedNodes.addOnSuccessListener { nodes ->
+            if (nodes.isEmpty()) {
+                Log.w("WearSync", "No se encontraron nodos conectados.")
+                result.success(false)
+                return@addOnSuccessListener
+            }
+
+            var successCount = 0
+            var completedCount = 0
+
             for (node in nodes) {
-                // Formato v8: "v8:timestamp:base64(accessToken|refreshToken)"
                 val rawData = "$accessToken|$refreshToken"
                 val encodedData = android.util.Base64.encodeToString(rawData.toByteArray(), android.util.Base64.NO_WRAP)
                 val message = "v8:$timestamp:$encodedData".toByteArray()
                 
                 Wearable.getMessageClient(this).sendMessage(node.id, PATH_AUTH, message)
-                    .addOnSuccessListener { Log.d("WearSync", "Mensaje v8 enviado a nodo: ${node.displayName}") }
+                    .addOnCompleteListener { task ->
+                        completedCount++
+                        if (task.isSuccessful) {
+                            successCount++
+                            Log.d("WearSync", "Mensaje v8 enviado exitosamente a: ${node.displayName}")
+                        } else {
+                            Log.e("WearSync", "Fallo al enviar mensaje a ${node.displayName}: ${task.exception?.message}")
+                        }
+
+                        if (completedCount == nodes.size) {
+                            result.success(successCount > 0)
+                        }
+                    }
             }
+        }.addOnFailureListener {
+            Log.e("WearSync", "Error obteniendo nodos: ${it.message}")
+            result.error("NODE_ERROR", it.message, null)
         }
-        result.success(true)
     }
 
     private fun openRemoteInput(hint: String, receiverName: String, result: MethodChannel.Result) {
