@@ -230,7 +230,13 @@ class _WearHomeScreenState extends State<WearHomeScreen> {
           ),
           TextButton(
             onPressed: () async {
-              await Supabase.instance.client.auth.signOut();
+              // v11: Solo logout local para no invalidar la sesión del teléfono
+              await Supabase.instance.client.auth.signOut(scope: SignOutScope.local);
+              
+              // Limpiar timestamp de sync para permitir re-sync inmediato
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.remove('last_wear_sync_ts');
+              
               if (context.mounted) {
                 Navigator.pop(context);
                 _updatePendingCount();

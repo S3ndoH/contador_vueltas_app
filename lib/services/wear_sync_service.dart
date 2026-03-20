@@ -108,6 +108,10 @@ class WearSyncService {
       }
     } catch (e) {
       debugPrint("WearSyncService: Error en syncCurrentSession: $e");
+      if (e.toString().contains("refresh_token_not_found") || 
+          e.toString().contains("Invalid Refresh Token")) {
+        debugPrint("WearSyncService: CRÍTICO - La sesión del teléfono ha expirado o ha sido revocada.");
+      }
     }
     return false;
   }
