@@ -69,6 +69,9 @@ class WearSyncService {
       final result = await _channel.invokeMethod<bool>('sendTokenToWatch', {
         'accessToken': accessToken,
         'refreshToken': refreshToken,
+      }).timeout(const Duration(seconds: 5), onTimeout: () {
+        debugPrint("WearSyncService: Timeout al sincronizar con el reloj.");
+        return false;
       });
       return result ?? false;
     } on PlatformException catch (e) {
