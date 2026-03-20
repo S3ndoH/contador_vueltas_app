@@ -1,6 +1,8 @@
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 
 class WearSyncService {
   static const _channel = MethodChannel('com.example.lapcounter/wear_sync');
@@ -12,32 +14,52 @@ class WearSyncService {
   final _tokenController = StreamController<Map<String, String>>.broadcast();
   Stream<Map<String, String>> get onTokenReceived => _tokenController.stream;
 
-  // Track last received timestamp to avoid duplicate processing from hybrid channels
-  int _lastTokenTimestamp = 0;
 
   void init() {
     _channel.setMethodCallHandler(_handleMethod);
   }
 
+  /// Clears the synced token from the Data Layer to prevent it from being
+  /// picked up again (e.g., after a logout).
+  Future<void> clearSyncedToken() async {
+    try {
+      await _channel.invokeMethod('clearAuthData');
+      debugPrint("WearSyncService: Token del Data Layer limpiado.");
+    } catch (e) {
+      debugPrint("WearSyncService: Error limpiando token: $e");
+    }
+  }
+
   Future<void> _handleMethod(MethodCall call) async {
-    switch (call.method) {
-      case 'onTokenReceived':
-        final accessToken = call.arguments['accessToken'] as String?;
-        final refreshToken = call.arguments['refreshToken'] as String?;
-        final timestamp = call.arguments['timestamp'] as int? ?? 0;
+    try {
+      switch (call.method) {
+        case 'onTokenReceived':
+          final accessToken = call.arguments['accessToken'] as String?;
+          final refreshToken = call.arguments['refreshToken'] as String?;
+          final timestamp = call.arguments['timestamp'] as int? ?? 0;
 
-        // Skip if this is a duplicated message (same tokens arrived via Data and Message client)
-        if (timestamp != 0 && timestamp <= _lastTokenTimestamp) return;
-        _lastTokenTimestamp = timestamp;
+          if (accessToken == null || refreshToken == null) return;
 
-        if (accessToken != null && refreshToken != null) {
-          print("WearSyncService: Token recibido de la capa nativa (ts: $timestamp)");
+          // Deduplicación persistente por timestamp
+          final prefs = await SharedPreferences.getInstance();
+          final lastTs = prefs.getInt('last_wear_sync_ts') ?? 0;
+
+          if (timestamp != 0 && timestamp <= lastTs) {
+            debugPrint("WearSyncService: Ignorando mensaje antiguo (ts: $timestamp, last: $lastTs)");
+            return;
+          }
+          
+          await prefs.setInt('last_wear_sync_ts', timestamp);
+
+          debugPrint("WearSyncService: Nuevo token recibido (ts: $timestamp)");
           _tokenController.add({
             'accessToken': accessToken,
             'refreshToken': refreshToken,
           });
-        }
-        break;
+          break;
+      }
+    } catch (e) {
+      debugPrint("WearSyncService: Error en _handleMethod: $e");
     }
   }
 

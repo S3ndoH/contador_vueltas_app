@@ -34,8 +34,9 @@ class MainActivity : FlutterActivity(), DataClient.OnDataChangedListener, Messag
                     val dataMap = DataMapItem.fromDataItem(item).dataMap
                     val accessToken = dataMap.getString("accessToken")
                     val refreshToken = dataMap.getString("refreshToken")
-                    Log.d("WearSync", "Token de inicio (Cold Start) encontrado en Data Layer")
-                    notifyFlutter(accessToken, refreshToken)
+                    val timestamp = dataMap.getLong("timestamp")
+                    Log.d("WearSync", "Token de inicio (Cold Start) encontrado en Data Layer con ts $timestamp")
+                    notifyFlutter(accessToken, refreshToken, timestamp)
                 }
             }
         }
@@ -66,6 +67,9 @@ class MainActivity : FlutterActivity(), DataClient.OnDataChangedListener, Messag
                     val receiverName = call.argument<String>("receiverName") ?: "input"
                     openRemoteInput(hint, receiverName, result)
                 }
+                "clearAuthData" -> {
+                    clearAuthData(result)
+                }
                 else -> {
                     result.notImplemented()
                 }
@@ -73,43 +77,50 @@ class MainActivity : FlutterActivity(), DataClient.OnDataChangedListener, Messag
         }
     }
 
+    private fun clearAuthData(result: MethodChannel.Result) {
+        Wearable.getDataClient(this).dataItems.addOnSuccessListener { dataItems ->
+            for (item in dataItems) {
+                if (item.uri.path == PATH_AUTH) {
+                    Wearable.getDataClient(this).deleteDataItems(item.uri)
+                    Log.d("WearSync", "Data Layer: Token limpiado (consumido)")
+                }
+            }
+            result.success(true)
+        }.addOnFailureListener {
+            result.error("CLEAR_FAILED", it.message, null)
+        }
+    }
+
     private fun sendTokenToWatch(accessToken: String, refreshToken: String, result: MethodChannel.Result) {
         Log.d("WearSync", "Iniciando envío de tokens. Path: $PATH_AUTH")
+        val timestamp = System.currentTimeMillis()
         
         // 1. DATA LAYER (State persistence)
         val putDataMapReq = PutDataMapRequest.create(PATH_AUTH)
         putDataMapReq.dataMap.putString("accessToken", accessToken)
         putDataMapReq.dataMap.putString("refreshToken", refreshToken)
-        putDataMapReq.dataMap.putLong("timestamp", System.currentTimeMillis())
+        putDataMapReq.dataMap.putLong("timestamp", timestamp)
         val putDataReq = putDataMapReq.asPutDataRequest()
         putDataReq.setUrgent()
 
         Wearable.getDataClient(this).putDataItem(putDataReq)
             .addOnSuccessListener {
                 Log.d("WearSync", "Data Layer: Item guardado exitosamente")
-                
-                // 2. MESSAGE CLIENT (Immediate signal)
-            }
-            .addOnFailureListener { e ->
-                Log.e("WearSync", "Error en Data Layer: ${e.message}")
             }
 
         // 2. MessageClient (Instant signaling) with Base64 to avoid character issues
         Wearable.getNodeClient(this).connectedNodes.addOnSuccessListener { nodes ->
-            if (nodes.isEmpty()) {
-                Log.w("WearSync", "No se encontraron relojes conectados")
-            }
             for (node in nodes) {
-                // Formato v7: "v7:base64(accessToken|refreshToken)"
+                // Formato v8: "v8:timestamp:base64(accessToken|refreshToken)"
                 val rawData = "$accessToken|$refreshToken"
                 val encodedData = android.util.Base64.encodeToString(rawData.toByteArray(), android.util.Base64.NO_WRAP)
-                val message = "v7:$encodedData".toByteArray()
+                val message = "v8:$timestamp:$encodedData".toByteArray()
                 
                 Wearable.getMessageClient(this).sendMessage(node.id, PATH_AUTH, message)
-                    .addOnSuccessListener { Log.d("WearSync", "Mensaje v7 enviado a nodo: ${node.displayName}") }
-                    .addOnFailureListener { Log.e("WearSync", "Error enviando mensaje v7: ${it.message}") }
+                    .addOnSuccessListener { Log.d("WearSync", "Mensaje v8 enviado a nodo: ${node.displayName}") }
             }
         }
+        result.success(true)
     }
 
     private fun openRemoteInput(hint: String, receiverName: String, result: MethodChannel.Result) {
@@ -122,8 +133,9 @@ class MainActivity : FlutterActivity(), DataClient.OnDataChangedListener, Messag
                 val dataMap = DataMapItem.fromDataItem(event.dataItem).dataMap
                 val accessToken = dataMap.getString("accessToken")
                 val refreshToken = dataMap.getString("refreshToken")
-                Log.d("WearSync", "Data Layer Changed: Token recibido")
-                notifyFlutter(accessToken, refreshToken)
+                val timestamp = dataMap.getLong("timestamp")
+                Log.d("WearSync", "Data Layer Changed: Token recibido con timestamp $timestamp")
+                notifyFlutter(accessToken, refreshToken, timestamp)
             }
         }
     }
@@ -134,35 +146,40 @@ class MainActivity : FlutterActivity(), DataClient.OnDataChangedListener, Messag
             Log.d("WearSync", "Mensaje recibido: $rawMessage")
             
             try {
-                if (rawMessage.startsWith("v7:")) {
+                if (rawMessage.startsWith("v8:")) {
+                    val partsMsg = rawMessage.split(":", limit = 3)
+                    if (partsMsg.size == 3) {
+                        val timestamp = partsMsg[1].toLong()
+                        val encoded = partsMsg[2]
+                        val decoded = String(android.util.Base64.decode(encoded, android.util.Base64.DEFAULT))
+                        val tokens = decoded.split("|", limit = 2)
+                        if (tokens.size == 2) {
+                            notifyFlutter(tokens[0], tokens[1], timestamp)
+                        }
+                    }
+                } else if (rawMessage.startsWith("v7:")) {
                     val encoded = rawMessage.substring(3)
                     val decoded = String(android.util.Base64.decode(encoded, android.util.Base64.DEFAULT))
-                    val parts = decoded.split("|", limit = 2)
-                    if (parts.size == 2) {
-                        notifyFlutter(parts[0], parts[1])
-                    }
-                } else {
-                    // Fallback para mensajes antiguos v6
-                    val parts = rawMessage.split("|", limit = 2)
-                    if (parts.size == 2) {
-                        notifyFlutter(parts[0], parts[1])
+                    val tokens = decoded.split("|", limit = 2)
+                    if (tokens.size == 2) {
+                        notifyFlutter(tokens[0], tokens[1], System.currentTimeMillis())
                     }
                 }
             } catch (e: Exception) {
-                Log.e("WearSync", "Error decodificando mensaje v7: ${e.message}")
+                Log.e("WearSync", "Error decodificando mensaje v8: ${e.message}")
             }
         }
     }
 
-    private fun notifyFlutter(accessToken: String?, refreshToken: String?) {
+    private fun notifyFlutter(accessToken: String?, refreshToken: String?, timestamp: Long) {
         if (accessToken == null || refreshToken == null) return
         
         runOnUiThread {
-            Log.d("WearSync", "Notificando a Flutter (v7): accessToken=${accessToken.take(10)}...")
+            Log.d("WearSync", "Notificando a Flutter (v8): ts=$timestamp")
             methodChannel?.invokeMethod("onTokenReceived", mapOf(
                 "accessToken" to accessToken,
                 "refreshToken" to refreshToken,
-                "timestamp" to System.currentTimeMillis()
+                "timestamp" to timestamp
             ))
         }
     }

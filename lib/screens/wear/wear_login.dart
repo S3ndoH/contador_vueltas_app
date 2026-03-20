@@ -55,6 +55,9 @@ class _WearLoginScreenState extends State<WearLoginScreen> {
         // setSession en Supabase 2.x restaura la sesión usando el token.
         await Supabase.instance.client.auth.setSession(refreshToken);
         
+        // v8: Limpiamos el token del Data Layer para que no se re-procese tras un logout
+        await WearSyncService().clearSyncedToken();
+        
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
