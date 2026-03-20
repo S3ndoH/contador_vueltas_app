@@ -4,6 +4,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../theme.dart';
 import '../services/database_service.dart';
+import '../services/wear_sync_service.dart';
 import '../models/training_summary.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -312,6 +313,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
           if (result == true) {
             _loadProfileData();
           }
+        }),
+        const SizedBox(height: 12),
+        _buildListButton('Sincronizar Reloj', LucideIcons.watch, () async {
+          final success = await WearSyncService().syncCurrentSession();
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(success 
+                ? '¡Sincronización enviada al reloj!' 
+                : 'Error al sincronizar con el reloj'),
+              backgroundColor: success ? AppColors.primary : AppColors.error,
+              duration: const Duration(seconds: 2),
+            ),
+          );
         }),
         const SizedBox(height: 12),
         _buildListButton('Configuración', LucideIcons.settings, () {

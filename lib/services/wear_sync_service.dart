@@ -9,8 +9,11 @@ class WearSyncService {
   factory WearSyncService() => _instance;
   WearSyncService._internal();
 
-  final _tokenController = StreamController<String>.broadcast();
-  Stream<String> get onTokenReceived => _tokenController.stream;
+  final _tokenController = StreamController<Map<String, String>>.broadcast();
+  Stream<Map<String, String>> get onTokenReceived => _tokenController.stream;
+
+  // Track last received timestamp to avoid duplicate processing from hybrid channels
+  int _lastTokenTimestamp = 0;
 
   void init() {
     _channel.setMethodCallHandler(_handleMethod);
@@ -19,29 +22,56 @@ class WearSyncService {
   Future<void> _handleMethod(MethodCall call) async {
     switch (call.method) {
       case 'onTokenReceived':
-        final token = call.arguments['token'] as String?;
-        if (token != null) {
-          _tokenController.add(token);
+        final accessToken = call.arguments['accessToken'] as String?;
+        final refreshToken = call.arguments['refreshToken'] as String?;
+        final timestamp = call.arguments['timestamp'] as int? ?? 0;
+
+        // Skip if this is a duplicated message (same tokens arrived via Data and Message client)
+        if (timestamp != 0 && timestamp <= _lastTokenTimestamp) return;
+        _lastTokenTimestamp = timestamp;
+
+        if (accessToken != null && refreshToken != null) {
+          print("WearSyncService: Token recibido de la capa nativa (ts: $timestamp)");
+          _tokenController.add({
+            'accessToken': accessToken,
+            'refreshToken': refreshToken,
+          });
         }
         break;
     }
   }
 
-  Future<bool> sendTokenToWatch(String token) async {
+  Future<bool> sendTokenToWatch(String accessToken, String refreshToken) async {
     try {
-      final result = await _channel.invokeMethod<bool>('sendTokenToWatch', {'token': token});
+      print("WearSyncService: Enviando tokens al reloj (híbrido)...");
+      final result = await _channel.invokeMethod<bool>('sendTokenToWatch', {
+        'accessToken': accessToken,
+        'refreshToken': refreshToken,
+      });
       return result ?? false;
     } on PlatformException catch (e) {
-      print("Error sending token to watch: ${e.message}");
+      print("WearSyncService: Error fatal en canal nativo: ${e.message}");
       return false;
     }
   }
 
-  /// Sends the current session token if available
+  /// Sends the current session tokens if available
   Future<bool> syncCurrentSession() async {
-    final session = Supabase.instance.client.auth.currentSession;
-    if (session != null) {
-      return await sendTokenToWatch(session.accessToken);
+    try {
+      final session = Supabase.instance.client.auth.currentSession;
+      if (session != null) {
+        final accessToken = session.accessToken;
+        final refreshToken = session.refreshToken;
+        
+        if (refreshToken != null) {
+          print("WearSyncService: Sincronizando tokens directamente...");
+          return await sendTokenToWatch(accessToken, refreshToken);
+        }
+      } else {
+        print("WearSyncService: No hay sesión activa para sincronizar.");
+      }
+    } catch (e) {
+      print("WearSyncService: Error en syncCurrentSession: $e");
     }
     return false;
   }

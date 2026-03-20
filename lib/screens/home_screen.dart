@@ -6,6 +6,7 @@ import '../theme.dart';
 import '../models/training_summary.dart';
 import '../models/notification_item.dart';
 import '../services/database_service.dart';
+import '../services/wear_sync_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -125,9 +126,43 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ],
             ),
-            _buildNotificationIcon(),
+            Row(
+              children: [
+                _buildWatchSyncIcon(),
+                const SizedBox(width: 12),
+                _buildNotificationIcon(),
+              ],
+            ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildWatchSyncIcon() {
+    return InkWell(
+      onTap: () async {
+        final success = await WearSyncService().syncCurrentSession();
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(success 
+              ? 'Sincronizando con el reloj...' 
+              : 'Error de conexión con el reloj'),
+            backgroundColor: success ? AppColors.primary : AppColors.error,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      },
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceDark,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+        ),
+        child: const Icon(LucideIcons.watch, color: Colors.white, size: 20),
       ),
     );
   }

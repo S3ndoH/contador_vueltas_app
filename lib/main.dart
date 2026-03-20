@@ -68,9 +68,17 @@ class _MyAppState extends State<MyApp> {
   Widget _getInitialScreen() {
     final session = Supabase.instance.client.auth.currentSession;
     if (_isWear == true) {
+      // Allow WearHomeScreen even without a session to support "MODO LOCAL"
       return const WearHomeScreen();
     } else {
-      return session != null ? const HomeScreen() : const LoginScreen();
+      // ON PHONE: If we have a session, try to sync it silently to the watch
+      if (session != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          WearSyncService().syncCurrentSession();
+        });
+        return const HomeScreen();
+      }
+      return const LoginScreen();
     }
   }
 }
