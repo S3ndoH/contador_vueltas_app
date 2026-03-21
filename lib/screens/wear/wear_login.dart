@@ -50,31 +50,66 @@ class _WearLoginScreenState extends State<WearLoginScreen> {
     _isProcessingSync = true;
     setState(() => _isLoading = true);
     
+    // v14 Mirror Sync Handling
+    final mirrorPayload = tokens['mirrorPayload'];
+    if (mirrorPayload != null && mirrorPayload.startsWith("v14:")) {
+      try {
+        final parts = mirrorPayload.substring(4).split("|");
+        if (parts.length == 2) {
+          final userId = parts[0];
+          final accessToken = parts[1];
+          
+          debugPrint("WearLoginScreen: Procesando Mirror Token v14...");
+          
+          // v15: Use setSession with ONLY the access token. 
+          // This ensures NO refresh token is used or stored, making the watch 100% passive.
+          await Supabase.instance.client.auth.setSession(accessToken);
+          
+          debugPrint("WearLoginScreen: Mirror Session establecida (v15) para usuario $userId");
+          
+          if (mounted) {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => const WearHomeScreen()),
+            );
+          }
+          // COMPLETA LA EJECUCIÓN V14
+          return;
+        }
+      } catch (e) {
+        debugPrint("WearLoginScreen: Error en v15 Mirror Sync: $e");
+      } finally {
+        if (mounted) setState(() => _isLoading = false);
+        _isProcessingSync = false;
+      }
+      return; // Importante: No seguir a la lógica legacy si ya detectamos v14
+    }
+
     final accessToken = tokens['accessToken'];
     final refreshToken = tokens['refreshToken'];
     
-    debugPrint("WearLoginScreen: Procesando tokens v10...");
-    
-    try {
-      if (refreshToken != null) {
+    // v15: Only process legacy tokens if they are valid and not empty
+    if (accessToken != null && accessToken.isNotEmpty && 
+        refreshToken != null && refreshToken.isNotEmpty) {
+      
+      debugPrint("WearLoginScreen: Procesando tokens v8/v10 legacy...");
+      
+      try {
         // Verificar si ya estamos logueados con una sesión válida
         final currentSession = Supabase.instance.client.auth.currentSession;
         if (currentSession != null) {
-          debugPrint("WearLoginScreen: Ya existe una sesión activa. Verificando integridad...");
-          // Si ya estamos logueados, podríamos ignorar o re-setear si es necesario.
-          // Por seguridad en v10, intentamos setSession pero atrapamos errores de "token ya usado"
-          // si el usuario ya está dentro.
+          debugPrint("WearLoginScreen: Ya existe una sesión activa.");
         }
 
         await Supabase.instance.client.auth.setSession(refreshToken);
         
-        // v8: Limpiamos el token del Data Layer para que no se re-procese tras un logout
+        // Limpiamos el token del Data Layer para que no se re-procese tras un logout
         await WearSyncService().clearSyncedToken();
         
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('¡Sincronización Exitosa!'),
+              content: Text('¡Sincronización Exitosa! (Legacy)'),
               backgroundColor: Colors.green,
               duration: Duration(seconds: 2),
             )
@@ -85,21 +120,33 @@ class _WearLoginScreenState extends State<WearLoginScreen> {
             MaterialPageRoute(builder: (context) => const WearHomeScreen()),
           );
         }
+      } catch (e) {
+        debugPrint("WearLoginScreen: Error en setSession (Legacy): $e");
+        
+        // v12: Recuperación silenciosa. Si falló porque el token ya se usó
+        // pero el usuario YA está logueado (por una señal paralela), procedemos.
+        final cs = Supabase.instance.client.auth.currentSession;
+        if (cs != null && mounted) {
+           Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const WearHomeScreen()));
+        }
+
+        if (mounted) {
+          // Mostramos el error exacto solo si realmente no estamos logueados
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error v10+: $e'),
+              backgroundColor: Colors.redAccent,
+            )
+          );
+        }
+      } finally {
+        if (mounted) setState(() => _isLoading = false);
+        _isProcessingSync = false;
       }
-    } catch (e) {
-      debugPrint("WearLoginScreen: Error en setSession: $e");
-      if (mounted) {
-        // Mostramos el error exacto para diagnóstico
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error v7: $e'),
-            backgroundColor: Colors.redAccent,
-          )
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-      _isProcessingSync = false;
+    } else {
+       // Si no hay tokens válidos ni mirror, reseteamos estado
+       if (mounted) setState(() => _isLoading = false);
+       _isProcessingSync = false;
     }
   }
 

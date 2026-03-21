@@ -36,16 +36,17 @@ class WearSyncService {
         case 'onTokenReceived':
           final accessToken = call.arguments['accessToken'] as String?;
           final refreshToken = call.arguments['refreshToken'] as String?;
+          final mirrorPayload = call.arguments['mirrorPayload'] as String?;
           final timestamp = call.arguments['timestamp'] as int? ?? 0;
 
-          if (accessToken == null || refreshToken == null) return;
-
-          // Deduplicación persistente por timestamp
+          // v15: Redundancy check. Allow sync if timestamp is new OR if we're currently LOGGED OUT.
+          // This fixes the "cannot re-sync without logout on phone" issue.
           final prefs = await SharedPreferences.getInstance();
           final lastTs = prefs.getInt('last_wear_sync_ts') ?? 0;
-
-          if (timestamp != 0 && timestamp <= lastTs) {
-            debugPrint("WearSyncService: Ignorando mensaje antiguo (ts: $timestamp, last: $lastTs)");
+          final isLoggedOut = Supabase.instance.client.auth.currentSession == null;
+          
+          if (timestamp != 0 && timestamp <= lastTs && !isLoggedOut) {
+            debugPrint("WearSyncService: Ignorando mensaje duplicado/antiguo (ts: $timestamp, last: $lastTs)");
             return;
           }
           
@@ -53,8 +54,9 @@ class WearSyncService {
 
           debugPrint("WearSyncService: Nuevo token recibido (ts: $timestamp)");
           _tokenController.add({
-            'accessToken': accessToken,
-            'refreshToken': refreshToken,
+            'accessToken': accessToken ?? "",
+            'refreshToken': refreshToken ?? "",
+            'mirrorPayload': mirrorPayload ?? "",
           });
           break;
       }
@@ -80,38 +82,37 @@ class WearSyncService {
     }
   }
 
-  /// Sends the current session tokens if available
+  /// Sends the provided accessToken to the watch as a "Passive Mirror".
+  /// v14: We ONLY send the accessToken and user ID to prevent the watch
+  /// from consuming the refreshToken and invalidating the phone's session.
+  Future<bool> syncTokens(String accessToken, String userId) async {
+    debugPrint("WearSyncService: Enviando Mirror Token al reloj (v15)...");
+    
+    // We send a combined payload: "v14:userId|accessToken"
+    final payload = "v14:$userId|$accessToken";
+    
+    // v15 fix: Key must be 'mirrorPayload' to match MainActivity.kt
+    final success = await _channel.invokeMethod<bool>('sendMirrorToken', {
+      'mirrorPayload': payload,
+      'timestamp': DateTime.now().millisecondsSinceEpoch,
+    });
+    
+    debugPrint("WearSyncService: Resultado del envío Mirror: $success");
+    return success ?? false;
+  }
+
+  /// Sends the current active session to the watch as a Mirror.
   Future<bool> syncCurrentSession() async {
     try {
-      // FIX (v9): Force session refresh on the phone to get a brand new, UNUSED refresh token.
-      // Supabase refresh tokens are one-time use (rotation), so if the phone already used it, 
-      // the watch will fail with 400 unless we get a fresh one.
-      debugPrint("WearSyncService: Refrescando sesión antes de enviar al reloj...");
-      await Supabase.instance.client.auth.refreshSession();
-      
-      // Pequeña pausa para asegurar que el estado de Supabase sea consistente
-      await Future.delayed(const Duration(milliseconds: 200));
-
       final session = Supabase.instance.client.auth.currentSession;
       if (session != null) {
-        final accessToken = session.accessToken;
-        final refreshToken = session.refreshToken;
-        
-        if (refreshToken != null) {
-          debugPrint("WearSyncService: Enviando tokens frescos al reloj...");
-          final success = await sendTokenToWatch(accessToken, refreshToken);
-          debugPrint("WearSyncService: Resultado del envío: $success");
-          return success;
-        }
+        debugPrint("WearSyncService: Sincronización manual iniciada (v15)...");
+        return await syncTokens(session.accessToken, session.user.id);
       } else {
-        debugPrint("WearSyncService: No hay sesión activa tras el refresco.");
+        debugPrint("WearSyncService: No hay sesión activa para sincronizar.");
       }
     } catch (e) {
       debugPrint("WearSyncService: Error en syncCurrentSession: $e");
-      if (e.toString().contains("refresh_token_not_found") || 
-          e.toString().contains("Invalid Refresh Token")) {
-        debugPrint("WearSyncService: CRÍTICO - La sesión del teléfono ha expirado o ha sido revocada.");
-      }
     }
     return false;
   }

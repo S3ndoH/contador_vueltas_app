@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter/services.dart';
 import 'theme.dart';
 import 'screens/challenges_screen.dart';
 import 'screens/login_screen.dart';
@@ -16,19 +17,55 @@ import 'services/wear_sync_service.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // v13/v15: Detect if it's a watch with high redundancy
+  bool isWatch = false;
+  try {
+    const channel = MethodChannel('com.example.lapcounter/wear_sync');
+    final bool? nativeIsWatch = await channel.invokeMethod<bool>('isWatch');
+    isWatch = nativeIsWatch ?? false;
+    debugPrint("main: Native isWatch detection: $isWatch");
+  } catch (e) {
+    debugPrint("main: Error in native detection: $e");
+  }
+
+  // v15: Fallback detection via platform/device info is hard in main(), 
+  // but we can pass a 'forced' flag if we want. For now, rely on native channel 
+  // and explicit initialization options.
+
+  // INITIALIZE SUPABASE
+  // v15: HARD DISABLE autoRefreshToken on Watch to protect Phone session.
   await Supabase.initialize(
     url: 'https://rwxsccdnidvihkjbapld.supabase.co',
     anonKey: 'sb_publishable_j3LDvViDYaTdDU9Mcox9zQ_wgrk8GsA',
+    authOptions: FlutterAuthClientOptions(
+      autoRefreshToken: !isWatch, 
+    ),
   );
 
   // INITIALIZE WEAR SYNC
-  WearSyncService().init();
+  final syncService = WearSyncService();
+  syncService.init();
 
-  runApp(const MyApp());
+  // v14: Listen for session updates on the Phone to push them to the watch automatically
+  if (!isWatch) {
+    Supabase.instance.client.auth.onAuthStateChange.listen((data) {
+      final event = data.event;
+      final session = data.session;
+      if (session != null && (event == AuthChangeEvent.signedIn || event == AuthChangeEvent.tokenRefreshed)) {
+        debugPrint("main: Session updated ($event), mirroring to watch (v14)...");
+        // v14: Pass the userId along with accessToken
+        syncService.syncTokens(session.accessToken, session.user.id);
+      }
+    });
+  }
+
+  runApp(MyApp(isWatchPreDetected: true, isWatchValue: isWatch));
 }
 
 class MyApp extends StatefulWidget {
-  const MyApp({super.key});
+  final bool isWatchPreDetected;
+  final bool isWatchValue;
+  const MyApp({super.key, this.isWatchPreDetected = false, this.isWatchValue = false});
 
   @override
   State<MyApp> createState() => _MyAppState();
@@ -36,6 +73,14 @@ class MyApp extends StatefulWidget {
 
 class _MyAppState extends State<MyApp> {
   bool? _isWear;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.isWatchPreDetected) {
+      _isWear = widget.isWatchValue;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {

@@ -31,12 +31,11 @@ class _LoginScreenState extends State<LoginScreen> {
         password: _passwordController.text.trim(),
       );
       
-      // SYNC WITH WEAR OS
-      try {
-        await WearSyncService().syncCurrentSession();
-      } catch (e) {
-        print("Wear sync error: $e");
-      }
+      // SYNC WITH WEAR OS (Non-blocking v12)
+      WearSyncService().syncCurrentSession().catchError((e) {
+        debugPrint("Wear sync background error: $e");
+        return false;
+      });
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

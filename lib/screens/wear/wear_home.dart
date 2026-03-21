@@ -230,17 +230,23 @@ class _WearHomeScreenState extends State<WearHomeScreen> {
           ),
           TextButton(
             onPressed: () async {
-              // v11: Solo logout local para no invalidar la sesión del teléfono
+              debugPrint("WearHomeScreen: Iniciando logout local v15...");
+              // v15: SignOut local. 
               await Supabase.instance.client.auth.signOut(scope: SignOutScope.local);
               
-              // Limpiar timestamp de sync para permitir re-sync inmediato
+              // Limpieza total de rastros del Data Layer local
               final prefs = await SharedPreferences.getInstance();
               await prefs.remove('last_wear_sync_ts');
               
+              debugPrint("WearHomeScreen: Sesión local eliminada. Volviendo a Login.");
+              
               if (context.mounted) {
-                Navigator.pop(context);
-                _updatePendingCount();
-                setState(() {});
+                Navigator.pop(context); // Cierra el diálogo
+                // Forzamos navegación al Login para resetear estado
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(builder: (context) => const WearLoginScreen()),
+                );
               }
             },
             child: const Text(
