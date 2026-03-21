@@ -67,7 +67,7 @@ class WearSyncService {
 
   Future<bool> sendTokenToWatch(String accessToken, String refreshToken) async {
     try {
-      print("WearSyncService: Enviando tokens al reloj (híbrido)...");
+      debugPrint("WearSyncService: Enviando tokens al reloj (híbrido)...");
       final result = await _channel.invokeMethod<bool>('sendTokenToWatch', {
         'accessToken': accessToken,
         'refreshToken': refreshToken,
@@ -77,7 +77,7 @@ class WearSyncService {
       });
       return result ?? false;
     } on PlatformException catch (e) {
-      print("WearSyncService: Error fatal en canal nativo: ${e.message}");
+      debugPrint("WearSyncService: Error fatal en canal nativo: ${e.message}");
       return false;
     }
   }
